@@ -2,17 +2,13 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import json
-
 from database import SessionLocal, engine, Base
 from models import User, Roadmap
 from schemas import UserCreate, UserOut, LoginSchema, TopicRequest, RoadmapOut
-from auth import get_password_hash, verify_password, create_access_token
-
+from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from settings import settings
 from services.ai_service import GeminiService
 from generators.roadmap_generator import RoadmapGenerator
-
-from auth import get_current_user
 
 # DB tablolarını oluştur
 Base.metadata.create_all(bind=engine)
@@ -22,20 +18,11 @@ app = FastAPI()
 # ---------- CORS ----------
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",  # regex ile herkese izin
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# ---------- DB dependency ----------
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # ---------- Signup ----------
@@ -64,13 +51,14 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 @app.post("/login")
 def login(login_data: LoginSchema, db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
+        (User.email == login_data.email_or_username) |
+        (User.username == login_data.email_or_username)
     ).first()
     if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     token = create_access_token({"user_id": user.id})
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token, "token_type": "bearer", "user_id": user.id}
 
 
 # ---------- Get User by ID ----------
@@ -95,9 +83,9 @@ def generate_roadmap(
 ):
     try:
         # Gemini'den roadmap oluştur
-        roadmap_content = roadmap_generator.create_roadmap(request.topic)
+        roadmap_content = roadmap_generator.create_roadmap(request.field)
 
-        # DB'ye kaydet
+        # DB'ye kaydet (login yapan kullanıcının ID'si ile)
         db_roadmap = Roadmap(
             user_id=current_user.id,
             content=json.dumps(roadmap_content)

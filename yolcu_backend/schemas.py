@@ -17,7 +17,7 @@ class UserOut(BaseModel):
     email: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class LoginSchema(BaseModel):
@@ -27,7 +27,8 @@ class LoginSchema(BaseModel):
 
 # ---------- Roadmap Request/Response ----------
 class TopicRequest(BaseModel):
-    field: str   # veya topic yerine field kullanıyoruz
+    field: str  # veya topic yerine field kullanıyoruz
+
 
 class RoadmapOut(BaseModel):
     id: int
@@ -37,4 +38,4 @@ class RoadmapOut(BaseModel):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

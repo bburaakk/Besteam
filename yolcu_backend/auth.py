@@ -18,6 +18,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
+# ----------------- DB dependency (main.py'den taşındı) -----------------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 # ----------------- Şifre Fonksiyonları -----------------
 def get_password_hash(password: str) -> str:
     """Parolayı hashler"""
@@ -49,7 +58,7 @@ def verify_token(token: str) -> dict:
 
 
 # ----------------- Kullanıcı Fonksiyonu -----------------
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(SessionLocal)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Token'dan kullanıcıyı alır"""
     payload = verify_token(token)
     user_id = payload.get("user_id")
