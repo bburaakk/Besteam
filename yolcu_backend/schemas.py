@@ -20,6 +20,7 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
+
 class LoginSchema(BaseModel):
     email_or_username: str
     password: str
@@ -39,3 +40,4 @@ class RoadmapOut(BaseModel):
 
     class Config:
         from_attributes = True
+

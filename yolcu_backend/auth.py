@@ -58,6 +58,7 @@ def verify_token(token: str) -> dict:
 
 
 # ----------------- Kullanıcı Fonksiyonu -----------------
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Token'dan kullanıcıyı alır"""
     payload = verify_token(token)
