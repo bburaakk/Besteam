@@ -3,8 +3,10 @@ from typing import Optional
 from datetime import datetime
 
 
+# ---------- User Schemas ----------
 class UserCreate(BaseModel):
-    full_name: str
+    first_name: str
+    last_name: str
     username: str
     email: str
     password: str
@@ -12,12 +14,17 @@ class UserCreate(BaseModel):
 
 class UserOut(BaseModel):
     id: int
-    full_name: str
+    first_name: str
+    last_name: str
     username: str
     email: str
+    biography: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
 
 
 class LoginSchema(BaseModel):
@@ -27,7 +34,8 @@ class LoginSchema(BaseModel):
 
 # ---------- Roadmap Request/Response ----------
 class TopicRequest(BaseModel):
-    field: str   # veya topic yerine field kullanıyoruz
+    field: str  # veya topic yerine field kullanıyoruz
+
 
 class RoadmapOut(BaseModel):
     id: int
@@ -37,4 +45,5 @@ class RoadmapOut(BaseModel):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
