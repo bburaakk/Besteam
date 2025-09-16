@@ -1,7 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status ,UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import json
+from prompts import MOTIVATIONAL_PROMPT, EVALUATION_PROMPT
+
 
 from database import SessionLocal, engine, Base
 from models import User, Roadmap
@@ -11,6 +13,7 @@ from auth import get_password_hash, verify_password, create_access_token
 from settings import settings
 from services.ai_service import GeminiService
 from generators.roadmap_generator import RoadmapGenerator
+
 
 from auth import get_current_user
 
@@ -109,3 +112,59 @@ def generate_roadmap(
         return db_roadmap
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------- Motivational ----------
+gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
+@app.get("/motivational-message")
+async def get_motivational_message():
+    """
+    Yazılım geliştiriciler için rastgele bir motivasyon mesajı döndürür.
+    """
+    try:
+
+        # İçeriği prompts.py dosyasından al
+        response = await gemini_service.generate_content(MOTIVATIONAL_PROMPT)
+
+        return {"message": response.text}
+
+    except Exception as e:
+        print(f"Motivasyon Mesajı Hatası: {e}")
+        # Hata durumunda standart bir HTTP hatası döndür
+        raise HTTPException(
+            status_code=500,
+            detail="Harika projeler seni bekliyor, haydi başlayalım!"
+        )
+
+
+# ---------- ProjectEvaluation ----------
+
+# Değerlendirme için API endpoint'i oluştur
+@app.post("/evaluate-project")
+async def evaluate_project(
+    projectTitle: str = Form(...),
+    projectDescription: str = Form(...),
+    projectFile: UploadFile = File(...)
+):
+    try:
+        project_code = await projectFile.read()
+        project_code_str = project_code.decode('utf-8')
+
+        # prompts.py dosyasındaki prompt'u formatlayarak kullan
+        formatted_prompt = EVALUATION_PROMPT.format(
+            project_title=projectTitle,
+            project_description=projectDescription,
+            project_code=project_code_str
+        )
+
+
+        response = await gemini_service.generate_content(formatted_prompt)
+
+        return {'feedback': response.text}
+
+    except Exception as e:
+        print(f"Sunucu Hatası: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Yapay zeka değerlendirmesi sırasında bir sunucu hatası oluştu."
+        )
