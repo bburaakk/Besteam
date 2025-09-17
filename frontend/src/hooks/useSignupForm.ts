@@ -12,11 +12,11 @@ export interface SignupFormValues {
 
 export const signupValidationSchema = Yup.object().shape({
   first_name: Yup.string()
-    .min(2, 'Ad en az 2 karakter olmalı')
+    .min(2, 'Ad en az 3 karakter olmalı')
     .max(50, 'Ad en fazla 50 karakter olabilir')
     .required('Ad zorunlu'),
   last_name: Yup.string()
-    .min(2, 'Soyad en az 2 karakter olmalı')
+    .min(2, 'Soyad en az 3 karakter olmalı')
     .max(50, 'Soyad en fazla 50 karakter olabilir')
     .required('Soyad zorunlu'),
   username: Yup.string()
@@ -32,7 +32,7 @@ export const signupValidationSchema = Yup.object().shape({
     .matches(/(?=.*[a-z])/, 'Şifre en az bir küçük harf içermeli')
     .matches(/(?=.*[A-Z])/, 'Şifre en az bir büyük harf içermeli')
     .matches(/(?=.*\d)/, 'Şifre en az bir rakam içermeli')
-    .matches(/(?=.*[@$!%*?&.])/, 'Şifre en az bir özel karakter içermeli')
+    .matches(/(?=.*[@$!%*?&.,])/, 'Şifre en az bir özel karakter içermeli')
     .required('Şifre zorunlu'),
   confirmPassword: Yup.string()
     .oneOf([Yup.ref('password')], 'Şifreler eşleşmiyor')

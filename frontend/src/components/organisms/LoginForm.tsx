@@ -2,7 +2,9 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import { FormInput, LoadingButton, Checkbox, Alert } from '../atoms';
-import { useAuth, loginValidationSchema, loginInitialValues } from '../../hooks';
+import { loginValidationSchema, loginInitialValues } from '../../hooks';
+import { useAuth } from '../../contexts/AuthContext';
+import { authService, handleApiError } from '../../services';
 import type { LoginFormValues } from '../../hooks';
 import type { LoginRequest } from '../../services';
 
@@ -11,7 +13,15 @@ interface LoginFormProps {
 }
 
 const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
-  const { isLoading, error, success, login, clearMessages } = useAuth();
+  const { setUser } = useAuth();
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [success, setSuccess] = React.useState<string | null>(null);
+
+  const clearMessages = () => {
+    setError(null);
+    setSuccess(null);
+  };
 
   const handleSubmit = async (values: LoginFormValues) => {
     const loginData: LoginRequest = {
@@ -19,9 +29,38 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       password: values.password
     };
 
-    const isSuccess = await login(loginData);
-    if (isSuccess && onSuccess) {
-      onSuccess();
+    setIsLoading(true);
+    clearMessages();
+
+    try {
+      const response = await authService.login(loginData);
+      
+      // Kullanıcı bilgilerini context'e kaydet (API'den gelen response'a göre)
+      const user = {
+        id: 1, // API'den gelen kullanıcı ID'si
+        email: values.email_or_username,
+        username: values.email_or_username,
+        firstName: undefined,
+        lastName: undefined,
+      };
+      
+      // Token'ı localStorage'a kaydet
+      if (response.access_token) {
+        localStorage.setItem('token', response.access_token);
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+      
+      setUser(user);
+      setSuccess('Giriş başarılı. Yönlendiriliyorsunuz...');
+      
+      if (onSuccess) {
+        onSuccess();
+      }
+    } catch (err) {
+      const errorMessage = handleApiError(err);
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 

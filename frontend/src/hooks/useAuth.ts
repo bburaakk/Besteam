@@ -28,7 +28,7 @@ export const useAuth = (): UseAuthReturn => {
 
     try {
       await authService.signup(data);
-      setSuccess('Hesabınız başarıyla oluşturuldu! Giriş yapabilirsiniz.');
+      setSuccess('Hesabınız başarıyla oluşturuldu. Giriş yapabilirsiniz.');
       return true;
     } catch (err) {
       const errorMessage = handleApiError(err);
@@ -45,7 +45,7 @@ export const useAuth = (): UseAuthReturn => {
 
     try {
       await authService.login(data);
-      setSuccess('Giriş başarılı! Yönlendiriliyorsunuz...');
+      setSuccess('Giriş başarılı. Yönlendiriliyorsunuz...');
       return true;
     } catch (err) {
       const errorMessage = handleApiError(err);

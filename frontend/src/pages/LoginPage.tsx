@@ -7,8 +7,8 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
 
   const handleLoginSuccess = () => {
-    // Başarılı giriş sonrası ana sayfaya yönlendirme
-    navigate('/');
+    // Başarılı giriş sonrası dashboard sayfasına yönlendirme
+    navigate('/dashboard');
     console.log('Login successful!');
   };
 

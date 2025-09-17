@@ -7,12 +7,16 @@ interface HeaderProps {
   title: string;
   onSearch?: (query: string) => void;
   className?: string;
+  onMenuClick?: () => void;
+  showMenuButton?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
   title,
   onSearch,
   className = '',
+  onMenuClick,
+  showMenuButton = false,
 }) => {
   const [open, setOpen] = React.useState(false);
   const navigate = useNavigate();
@@ -22,6 +26,17 @@ const Header: React.FC<HeaderProps> = ({
         <div className="flex justify-between items-center py-4">
           {/* Logo */}
           <div className="flex items-center gap-4">
+            {/* Menu button for authenticated users */}
+            {showMenuButton && (
+              <button
+                onClick={onMenuClick}
+                className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            )}
             <div className="relative">
               <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary via-primary-600 to-purple-600 flex items-center justify-center shadow-lg">
                 <span className="text-white font-black text-lg">Y</span>
@@ -39,19 +54,19 @@ const Header: React.FC<HeaderProps> = ({
           {/* Navigation */}
           <nav className="hidden lg:flex items-center gap-8">
             {[
-              { href: '#analiz', label: 'Analiz' },
-              { href: '#yol-haritasi', label: 'Yol Haritası' },
+              { href: '/cv-analysis', label: 'CV Analizi' },
+              { href: '/roadmap', label: 'Yol Haritası' },
               { href: '#ogrenme', label: 'Öğrenme' },
               { href: '#topluluk', label: 'Topluluk' }
             ].map(item => (
-              <a 
+              <button 
                 key={item.href}
-                href={item.href} 
+                onClick={() => item.href.startsWith('/') ? navigate(item.href) : document.querySelector(item.href)?.scrollIntoView({ behavior: 'smooth' })}
                 className="relative text-sm font-medium text-gray-700 hover:text-primary transition-colors group"
               >
                 {item.label}
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-primary to-purple-600 group-hover:w-full transition-all duration-300" />
-              </a>
+              </button>
             ))}
           </nav>
 
@@ -88,19 +103,25 @@ const Header: React.FC<HeaderProps> = ({
           <div className="px-4 sm:px-6 lg:px-10 py-6">
             <nav className="space-y-4">
               {[
-                { href: '#analiz', label: 'CV Analizi' },
-                { href: '#yol-haritasi', label: 'Yol Haritası' },
+                { href: '/cv-analysis', label: 'CV Analizi' },
+                { href: '/roadmap', label: 'Yol Haritası' },
                 { href: '#ogrenme', label: 'Öğrenme' },
                 { href: '#topluluk', label: 'Topluluk' }
               ].map(item => (
-                <a 
+                <button 
                   key={item.href}
-                  onClick={() => setOpen(false)} 
-                  href={item.href} 
-                  className="block py-3 px-4 rounded-xl text-gray-700 hover:text-primary hover:bg-primary/5 transition-all font-medium"
+                  onClick={() => {
+                    setOpen(false);
+                    if (item.href.startsWith('/')) {
+                      navigate(item.href);
+                    } else {
+                      document.querySelector(item.href)?.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
+                  className="block w-full text-left py-3 px-4 rounded-xl text-gray-700 hover:text-primary hover:bg-primary/5 transition-all font-medium"
                 >
                   {item.label}
-                </a>
+                </button>
               ))}
             </nav>
             

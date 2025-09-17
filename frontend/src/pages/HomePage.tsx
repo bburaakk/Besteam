@@ -4,7 +4,6 @@ import {
   HeroSection, 
   FeaturesGrid, 
   Timeline, 
-  TestimonialsSection, 
   CTASection 
 } from '../components/sections';
 
@@ -14,7 +13,6 @@ const HomePage: React.FC = () => {
       <HeroSection />
       <FeaturesGrid />
       <Timeline />
-      <TestimonialsSection />
       <CTASection />
     </MainLayout>
   );
