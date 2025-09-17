@@ -1,7 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import json
+import tempfile
+import os
+
 from database import SessionLocal, engine, Base
 from models import User, Roadmap
 from schemas import UserCreate, UserOut, LoginSchema, TopicRequest, RoadmapOut
@@ -9,6 +11,8 @@ from auth import get_password_hash, verify_password, create_access_token, get_cu
 from settings import settings
 from services.ai_service import GeminiService
 from generators.roadmap_generator import RoadmapGenerator
+from generators.cv_analyzer import CVAnalyzer
+from prompts.cv_prompts import CV_FEEDBACK_PROMPT
 
 # DB tablolarını oluştur
 Base.metadata.create_all(bind=engine)
@@ -23,6 +27,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------- Services ----------
+gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
+roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
+cv_analyzer = CVAnalyzer(gemini_api_key=settings.GEMINI_API_KEY)
 
 # ---------- Signup ----------
 @app.post("/signup", response_model=UserOut)
@@ -45,6 +54,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     return db_user
+
 # ---------- Login ----------
 @app.post("/login")
 def login(data: LoginSchema, db: Session = Depends(get_db)):
@@ -67,16 +77,70 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 # ---------- Roadmap Generator ----------
-gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
-roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
-
 @app.post("/api/roadmaps/generate", response_model=RoadmapOut)
-def generate_roadmap(request: TopicRequest,
-                     db: Session = Depends(get_db),
-                     current_user: User = Depends(get_current_user)):
-    content = f"Generated roadmap for {request.field}"  # Burada gerçek AI veya logic eklenebilir
+def generate_roadmap(
+    request: TopicRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    content = f"Generated roadmap for {request.field}"
     roadmap = Roadmap(user_id=current_user.id, content=content)
     db.add(roadmap)
     db.commit()
     db.refresh(roadmap)
     return roadmap
+
+# ---------- CV Analysis ----------
+@app.post("/api/cv/analyze")
+async def analyze_cv(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    # PDF veya TXT dosya kontrolü
+    if not file.filename.lower().endswith(('.pdf', '.txt')):
+        raise HTTPException(status_code=400, detail="Only PDF or TXT files allowed.")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(status_code=413, detail="File too large (max 5MB).")
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+            temp_file.write(content)
+            temp_path = temp_file.name
+
+        cv_text = cv_analyzer.read_cv(temp_path)
+        keywords = cv_analyzer.extract_keywords(cv_text)
+
+        issues_context = f"Eksik bulunan anahtar kelimeler: {', '.join(keywords.get('missing', []))}"
+
+        prompt = CV_FEEDBACK_PROMPT.format(
+            issues_context=issues_context,
+            cv_text=cv_text[:4000]
+        )
+
+        # Düzeltilmiş: generate_content metodunu kullanıyoruz
+        feedback = gemini_service.generate_content(prompt)
+
+        os.unlink(temp_path)
+
+        return {
+            "success": True,
+            "feedback": feedback,
+            "keywords": keywords,
+            "user_id": current_user.id,
+            "filename": file.filename
+        }
+    except Exception as e:
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.unlink(temp_path)
+        raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
+
+# ---------- Health Check ----------
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "message": "API is running"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
