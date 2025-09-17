@@ -17,17 +17,18 @@ DEĞERLENDİRME KRİTERLERİ:
 3.  En İyi Pratikler (Best Practices): Kullanılan teknolojiye (Python, SQL vb.) özgü en iyi pratikler uygulanmış mı?
 4.  Geliştirilebilecek Yönler: Kullanıcı bu projeyi daha iyi hale getirmek için ne yapabilir?
 
-LÜTFEN DEĞERLENDİRMENİ AŞAĞIDAKİ FORMATTA, MARKDOWN KULLANARAK VE TÜRKÇE OLARAK SUN:
+LÜTFEN DEĞERLENDİRMENİ AŞAĞIDAKİ JSON FORMATINDA, TÜRKÇE OLARAK SUN. SADECE JSON ÇIKTISI VER, BAŞKA HİÇBİR AÇIKLAMA EKLEME:
 
-Genel Değerlendirme
-[Buraya kodun genel bir özetini ve ilk izlenimini yaz.]
-
-Olumlu Yönler
-[Tespit ettiğin 1-2 olumlu noktayı madde olarak yaz.]
-
-Geliştirilebilecek Yönler
-[Tespit ettiğin 1-2 geliştirilebilir noktayı, nedenleriyle birlikte madde olarak yaz.]
-
-Öğrenme Tavsiyesi
-[Kullanıcının bu projeden yola çıkarak hangi konulara odaklanması gerektiğini belirt.]
+{{
+  "genelDegerlendirme": "Buraya kodun genel bir özetini ve ilk izlenimini yaz.",
+  "olumluYonler": [
+    "Tespit ettiğin birinci olumlu nokta.",
+    "Tespit ettiğin ikinci olumlu nokta."
+  ],
+  "gelistirilebilecekYonler": [
+    "Tespit ettiğin birinci geliştirilebilir nokta ve nedeni.",
+    "Tespit ettiğin ikinci geliştirilebilir nokta ve nedeni."
+  ],
+  "ogrenmeTavsiyesi": "Kullanıcının bu projeden yola çıkarak hangi konulara odaklanması gerektiğini belirt."
+}}
 """

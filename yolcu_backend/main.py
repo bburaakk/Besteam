@@ -2,7 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException, status ,UploadFile, File, F
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import json
-from prompts import MOTIVATIONAL_PROMPT, EVALUATION_PROMPT
+from prompts.motivational_prompt import MOTIVATIONAL_PROMPT
+from prompts.project_evaluation_prompt import EVALUATION_PROMPT
 
 
 from database import SessionLocal, engine, Base
@@ -13,12 +14,16 @@ from auth import get_password_hash, verify_password, create_access_token
 from settings import settings
 from services.ai_service import GeminiService
 from generators.roadmap_generator import RoadmapGenerator
+from generators.evaluate_project_generator import ProjectEvaluator
 
 
 from auth import get_current_user
 
 # DB tablolarını oluştur
 Base.metadata.create_all(bind=engine)
+gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
+roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
+project_evaluator = ProjectEvaluator(ai_service=gemini_service)
 
 app = FastAPI()
 
@@ -85,10 +90,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 
-# ---------- Roadmap Generator ----------
-gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
-roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
-
+# ---------- Roadmaps ----------
 
 @app.post("/api/roadmaps/generate", response_model=RoadmapOut)
 def generate_roadmap(
@@ -115,22 +117,15 @@ def generate_roadmap(
 
 
 # ---------- Motivational ----------
-gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
 @app.get("/motivational-message")
 async def get_motivational_message():
-    """
-    Yazılım geliştiriciler için rastgele bir motivasyon mesajı döndürür.
-    """
     try:
+        response = gemini_service.generate_content(MOTIVATIONAL_PROMPT)
 
-        # İçeriği prompts.py dosyasından al
-        response = await gemini_service.generate_content(MOTIVATIONAL_PROMPT)
-
-        return {"message": response.text}
+        return {"message": response}
 
     except Exception as e:
         print(f"Motivasyon Mesajı Hatası: {e}")
-        # Hata durumunda standart bir HTTP hatası döndür
         raise HTTPException(
             status_code=500,
             detail="Harika projeler seni bekliyor, haydi başlayalım!"
@@ -138,8 +133,6 @@ async def get_motivational_message():
 
 
 # ---------- ProjectEvaluation ----------
-
-# Değerlendirme için API endpoint'i oluştur
 @app.post("/evaluate-project")
 async def evaluate_project(
     projectTitle: str = Form(...),
@@ -150,21 +143,24 @@ async def evaluate_project(
         project_code = await projectFile.read()
         project_code_str = project_code.decode('utf-8')
 
-        # prompts.py dosyasındaki prompt'u formatlayarak kullan
-        formatted_prompt = EVALUATION_PROMPT.format(
+        evaluation_result = project_evaluator.evaluate(
             project_title=projectTitle,
             project_description=projectDescription,
             project_code=project_code_str
         )
 
+        return {'feedback': evaluation_result}
 
-        response = await gemini_service.generate_content(formatted_prompt)
-
-        return {'feedback': response.text}
-
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=500,
+            detail="Yapay zeka yanıtı JSON formatında değil."
+        )
     except Exception as e:
         print(f"Sunucu Hatası: {e}")
         raise HTTPException(
             status_code=500,
             detail="Yapay zeka değerlendirmesi sırasında bir sunucu hatası oluştu."
         )
+
+
