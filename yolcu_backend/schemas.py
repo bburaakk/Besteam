@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
 from typing import Any, Dict,List, Optional
 
@@ -67,3 +66,6 @@ class CVOut(CVBase):
 
     class Config:
         from_attributes = True
+
+class ProjectSuggestionResponse(BaseModel):
+    suggestions: List[str]

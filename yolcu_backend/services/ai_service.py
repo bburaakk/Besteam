@@ -1,7 +1,7 @@
 import google.generativeai as genai
 
 class GeminiService:
-    def __init__(self, api_key: str, model_name: str = 'gemini-2.5-flash'):
+    def __init__(self, api_key: str, model_name: str = 'gemini-1.5-flash'):
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
 
