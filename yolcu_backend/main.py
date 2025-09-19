@@ -13,8 +13,10 @@ from auth import get_password_hash, verify_password, create_access_token
 
 from settings import settings
 from services.ai_service import GeminiService
+from services import db_service
 from generators.roadmap_generator import RoadmapGenerator
 from generators.evaluate_project_generator import ProjectEvaluator
+from generators.project_suggestion_generator import ProjectSuggestionGenerator
 
 
 from auth import get_current_user
@@ -24,6 +26,7 @@ Base.metadata.create_all(bind=engine)
 gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
 roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
 project_evaluator = ProjectEvaluator(ai_service=gemini_service)
+project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
 
 app = FastAPI()
 
@@ -70,15 +73,16 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 # ---------- Login ----------
 @app.post("/login")
-def login(login_data: LoginSchema, db: Session = Depends(get_db)):
+def login(data: LoginSchema, db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
+        (User.email == data.email_or_username) | (User.username == data.email_or_username)
     ).first()
-    if not user or not verify_password(login_data.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    token = create_access_token({"user_id": user.id})
-    return {"access_token": token, "token_type": "bearer"}
+    if not user or not verify_password(data.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid email/username or password")
+
+    access_token = create_access_token(data={"sub": str(user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 # ---------- Get User by ID ----------
@@ -90,30 +94,44 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 
-# ---------- Roadmaps ----------
-
+# ---------- Roadmap Generator ----------
 @app.post("/api/roadmaps/generate", response_model=RoadmapOut)
 def generate_roadmap(
-        request: TopicRequest,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    request: TopicRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    generator = RoadmapGenerator(ai_service=gemini_service)  # gemini_service DI yapılmalı
+    roadmap_json = generator.create_roadmap(request.field)   # dict döner
+
+    roadmap = Roadmap(user_id=current_user.id, content=roadmap_json)
+    db.add(roadmap)
+    db.commit()
+    db.refresh(roadmap)
+
+    return roadmap
+
+# ---------- Project Suggestions ----------
+@app.get("/project-suggestions")
+def get_project_suggestions(db: Session = Depends(get_db)):
     try:
-        # Gemini'den roadmap oluştur
-        roadmap_content = roadmap_generator.create_roadmap(request.topic)
+        # 1. Fetch titles from the database
+        titles = db_service.get_centralnode_titles(db)
+        if not titles:
+            raise HTTPException(status_code=404, detail="No roadmap titles found to generate suggestions.")
 
-        # DB'ye kaydet
-        db_roadmap = Roadmap(
-            user_id=current_user.id,
-            content=json.dumps(roadmap_content)
-        )
-        db.add(db_roadmap)
-        db.commit()
-        db.refresh(db_roadmap)
+        # 2. Generate suggestions using the generator
+        suggestions = project_suggestion_generator.generate_suggestions(titles)
 
-        return db_roadmap
+        # 3. Return the suggestions
+        return {"suggestions": suggestions}
+
+    except HTTPException as e:
+        # Re-raise HTTP exceptions
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error generating project suggestions: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
 
 
 # ---------- Motivational ----------
