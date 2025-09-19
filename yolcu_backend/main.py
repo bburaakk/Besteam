@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 import tempfile
 import os
 from database import SessionLocal, engine, Base
-from models import User, Roadmap
-from schemas import UserCreate, UserOut, LoginSchema, TopicRequest, RoadmapOut
+from models import User, Roadmap, CV
+from schemas import UserCreate, UserOut, LoginSchema, TopicRequest, RoadmapOut, CVOut
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from settings import settings
 from services.ai_service import GeminiService
@@ -92,57 +92,64 @@ def generate_roadmap(
 
     return roadmap
 
-
-# ---------- CV Analysis ----------
-@app.post("/api/cv/analyze")
+@app.post("/api/cv/analyze", response_model=CVOut)
 async def analyze_cv(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    # PDF veya TXT dosya kontrolü
+    # --- Dosya kontrolü ---
     if not file.filename.lower().endswith(('.pdf', '.txt')):
         raise HTTPException(status_code=400, detail="Only PDF or TXT files allowed.")
 
     content = await file.read()
-    if len(content) > 5 * 1024 * 1024:  # 5MB limit
+    if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 5MB).")
 
     try:
+        # --- Geçici dosya oluştur ---
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
             temp_file.write(content)
             temp_path = temp_file.name
 
+        # --- CV içeriğini oku ---
         cv_text = cv_analyzer.read_cv(temp_path)
-        keywords = cv_analyzer.extract_keywords(cv_text)
 
-        issues_context = f"Eksik bulunan anahtar kelimeler: {', '.join(keywords.get('missing', []))}"
+        # --- ATS analizleri ---
+        keywords_result = cv_analyzer.extract_keywords(cv_text)
+        basic_score = cv_analyzer.ats_score_basic(cv_text, keywords_result["found"])
+        advanced_score = cv_analyzer.ats_score_advanced(cv_text, keywords_result["found"])
+        language = cv_analyzer.detect_language(cv_text)
+        tips = cv_analyzer.get_ats_optimization_tips(advanced_score)
+        feedback = cv_analyzer.generate_ai_feedback(cv_text, advanced_score)
 
-        prompt = CV_FEEDBACK_PROMPT.format(
-            issues_context=issues_context,
-            cv_text=cv_text[:4000]
-        )
-
-        # Düzeltilmiş: generate_content metodunu kullanıyoruz
-        feedback = gemini_service.generate_content(prompt)
-
+        # --- temp dosya temizliği ---
         os.unlink(temp_path)
 
-        return {
-            "success": True,
-            "feedback": feedback,
-            "keywords": keywords,
-            "user_id": current_user.id,
-            "filename": file.filename
-        }
+        # --- DB'ye kaydet ---
+        cv_entry = CV(
+            user_id=current_user.id,
+            file_name=file.filename,
+            content=cv_text,
+            basic_score=basic_score["basic_score"],
+            advanced_score=advanced_score["basic_score"],
+            final_score=advanced_score["final_score"],
+            found_keywords=advanced_score["found_keywords"],
+            missing_keywords=advanced_score["missing_keywords"],
+            feedback=feedback,
+            tips=tips,
+            language=language,
+        )
+        db.add(cv_entry)
+        db.commit()
+        db.refresh(cv_entry)
+
+        return cv_entry
+
     except Exception as e:
         if 'temp_path' in locals() and os.path.exists(temp_path):
             os.unlink(temp_path)
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
-
-# ---------- Health Check ----------
-@app.get("/health")
-def health_check():
-    return {"status": "healthy", "message": "API is running"}
 
 if __name__ == "__main__":
     import uvicorn

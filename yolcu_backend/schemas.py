@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict,List, Optional
 
 # ---------- User Schemas ----------
 class UserCreate(BaseModel):
@@ -41,3 +41,29 @@ class RoadmapOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+class CVBase(BaseModel):
+    file_name: str
+    content: str
+    basic_score: Optional[float] = None
+    advanced_score: Optional[float] = None
+    final_score: Optional[float] = None
+    found_keywords: Optional[List[str]] = None
+    missing_keywords: Optional[List[str]] = None
+    feedback: Optional[str] = None
+    tips: Optional[List[str]] = None
+    language: Optional[str] = None
+
+
+class CVCreate(CVBase):
+    pass
+
+
+class CVOut(CVBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
