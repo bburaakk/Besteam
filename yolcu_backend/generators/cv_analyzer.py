@@ -67,7 +67,7 @@ class CVAnalyzer:
         }
 
     def ats_score_advanced(self, text: str, keywords: List[str]) -> Dict[str, Any]:
-        """ATS skoru + ağırlıklı analiz (ör. önemli keywordler daha fazla puan getirir)."""
+        """ATS skoru + ağırlıklı analiz (önemli keywordler daha fazla puan getirir)."""
         base_result = self.ats_score_basic(text, keywords)
 
         counts = Counter(re.findall(r"\b[a-zA-ZğüşöçıİĞÜŞÖÇ]+\b", text.lower()))
@@ -75,7 +75,12 @@ class CVAnalyzer:
         for kw in keywords:
             weighted_score += min(10, counts.get(kw.lower(), 0))  # tekrar limiti
 
-        final_score = round((base_result["basic_score"] + weighted_score) / 2, 2)
+        # Weighted score'u normalize et
+        max_weighted = len(keywords) * 10  # en fazla olabilecek değer
+        weighted_pct = (weighted_score / max_weighted) * 100 if max_weighted else 0
+
+        # Final score = base + weighted (her ikisi % üzerinden)
+        final_score = round((base_result["basic_score"] + weighted_pct) / 2, 2)
 
         base_result["final_score"] = final_score
         return base_result

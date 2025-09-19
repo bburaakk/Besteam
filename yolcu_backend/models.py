@@ -19,6 +19,7 @@ class User(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     roadmaps = relationship("Roadmap", back_populates="user")
+    cvs = relationship("CV", back_populates="user", cascade="all, delete-orphan")
 
 
 class Roadmap(Base):
