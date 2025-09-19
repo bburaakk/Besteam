@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from typing import Any, Dict
 
 # ---------- User Schemas ----------
 class UserCreate(BaseModel):
@@ -8,7 +9,7 @@ class UserCreate(BaseModel):
     last_name: str
     username: str
     email: str
-    password: str
+    password_hash: str
 
 class UserOut(BaseModel):
     id: int
@@ -29,14 +30,14 @@ class LoginSchema(BaseModel):
 
 # ---------- Roadmap Request/Response ----------
 class TopicRequest(BaseModel):
-    field: str   # veya topic yerine field kullanıyoruz
+    field: str   # Kullanıcıdan gelen konu
 
 class RoadmapOut(BaseModel):
     id: int
     user_id: int
-    content: str
+    content: Dict[str, Any]   # JSONB için dict tipinde
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
-        from_attributes = True
+        orm_mode = True

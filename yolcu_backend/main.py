@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import tempfile
 import os
-
 from database import SessionLocal, engine, Base
 from models import User, Roadmap
 from schemas import UserCreate, UserOut, LoginSchema, TopicRequest, RoadmapOut
@@ -83,12 +82,16 @@ def generate_roadmap(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    content = f"Generated roadmap for {request.field}"
-    roadmap = Roadmap(user_id=current_user.id, content=content)
+    generator = RoadmapGenerator(ai_service=gemini_service)  # gemini_service DI yapılmalı
+    roadmap_json = generator.create_roadmap(request.field)   # dict döner
+
+    roadmap = Roadmap(user_id=current_user.id, content=roadmap_json)
     db.add(roadmap)
     db.commit()
     db.refresh(roadmap)
+
     return roadmap
+
 
 # ---------- CV Analysis ----------
 @app.post("/api/cv/analyze")

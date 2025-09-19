@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, TIMESTAMP, func
 from sqlalchemy.orm import relationship
 from database import Base
+from sqlalchemy.dialects.postgresql import JSONB
 
 class User(Base):
     __tablename__ = "users"
@@ -24,7 +25,7 @@ class Roadmap(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    content = Column(Text, nullable=False)
+    content = Column(JSONB, nullable=False)  # <-- JSONB olarak değişti
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 

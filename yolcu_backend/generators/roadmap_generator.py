@@ -13,4 +13,5 @@ class RoadmapGenerator:
     def create_roadmap(self, topic: str) -> dict:
         final_prompt = VISUAL_PROMPT_TEMPLATE.format(field=topic)
         raw_response = self.ai_service.generate_content(final_prompt)
-        return self._clean_and_parse_json(raw_response)
+        return self._clean_and_parse_json(raw_response)  # dict döner
+
