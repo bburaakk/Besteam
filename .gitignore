@@ -1,0 +1,4 @@
+.idea
+.venv
+yolcu_backend/database.py
+.env
