@@ -107,14 +107,19 @@ class CVAnalyzer:
 
     # ------------------ AI Feedback ------------------
     def generate_ai_feedback(self, cv_text: str, issues: Dict[str, Any]) -> str:
-        """Gemini ile ATS odaklı geri bildirim üretir."""
+        """Gemini ile ATS odaklı geri bildirim üretir ve gereksiz karakterleri temizler."""
         try:
             prompt = CV_FEEDBACK_PROMPT.format(
                 issues_context=json.dumps(issues, ensure_ascii=False, indent=2),
                 cv_text=cv_text[:4000]  # 4K karakter limiti
             )
             response = self.gemini.generate_content(prompt)
-            return response
+
+            # --- Temizleme ---
+            cleaned = response.replace("*", "")  # yıldız işaretlerini kaldır
+            cleaned = cleaned.replace("\n", " ")  # yeni satırları boşlukla değiştir
+            cleaned = " ".join(cleaned.split())  # birden fazla boşluğu tek boşluğa indir
+            return cleaned
         except Exception as e:
             return f"AI feedback error: {e}"
 
@@ -141,20 +146,5 @@ class CVAnalyzer:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def generate_ai_feedback(self, cv_text: str, issues: Dict[str, Any]) -> str:
-        """Gemini ile ATS odaklı geri bildirim üretir ve gereksiz karakterleri temizler."""
-        try:
-            prompt = CV_FEEDBACK_PROMPT.format(
-                issues_context=json.dumps(issues, ensure_ascii=False, indent=2),
-                cv_text=cv_text[:4000]  # 4K karakter limiti
-            )
-            response = self.gemini.generate_content(prompt)
 
-            # --- Temizleme ---
-            cleaned = response.replace("*", "")  # yıldız işaretlerini kaldır
-            cleaned = cleaned.replace("\n", " ")  # yeni satırları boşlukla değiştir
-            cleaned = " ".join(cleaned.split())  # birden fazla boşluğu tek boşluğa indir
-            return cleaned
-        except Exception as e:
-            return f"AI feedback error: {e}"
 
