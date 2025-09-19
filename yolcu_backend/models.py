@@ -21,7 +21,6 @@ class User(Base):
     roadmaps = relationship("Roadmap", back_populates="user")
     cvs = relationship("CV", back_populates="user", cascade="all, delete-orphan")
 
-
 class Roadmap(Base):
     __tablename__ = "roadmaps"
 

@@ -12,7 +12,9 @@ from services.ai_service import GeminiService
 from generators.roadmap_generator import RoadmapGenerator
 from generators.cv_analyzer import CVAnalyzer
 from prompts.cv_prompts import CV_FEEDBACK_PROMPT
-
+from typing import Annotated
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 # DB tablolarını oluştur
 Base.metadata.create_all(bind=engine)
 
@@ -53,20 +55,24 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     return db_user
-
-# ---------- Login ----------
 @app.post("/login")
-def login(data: LoginSchema, db: Session = Depends(get_db)):
+def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
+    # `form_data` objesi `username` ve `password` alanlarına sahiptir.
+    # Bizim "username" alanımız hem email hem de kullanıcı adı olabildiği için
+    # kodu buna göre uyarlıyoruz.
     user = db.query(User).filter(
-        (User.email == data.email_or_username) | (User.username == data.email_or_username)
+        (User.email == form_data.username) | (User.username == form_data.username)
     ).first()
 
-    if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Invalid email/username or password")
+    if not user or not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, # 400 yerine 401 daha doğru olur
+            detail="Incorrect email/username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     access_token = create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
-
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)):
