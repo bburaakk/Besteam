@@ -1,5 +1,4 @@
 fastapi
-uvicorn
 sqlalchemy
 psycopg2-binary
 pydantic
@@ -7,3 +6,16 @@ python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
 google-generativeai
+fitz
+PyMuPDF
+langdetect
+google-generativeai
+passlib[bcrypt]
+python-jose
+fastapi
+uvicorn
+SQLAlchemy
+psycopg2-binary
+pydantic
+pydantic-settings
+

@@ -1,20 +1,20 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+import os
+import tempfile
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Path
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import tempfile
-import os
+
 from database import SessionLocal, engine, Base
 from models import User, Roadmap, CV
-from schemas import UserCreate, UserOut, LoginSchema, TopicRequest, RoadmapOut, CVOut
+from schemas import UserCreate, UserOut, LoginSchema, TopicRequest, RoadmapOut, CVOut,TokenUserResponse
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from settings import settings
 from services.ai_service import GeminiService
 from generators.roadmap_generator import RoadmapGenerator
 from generators.cv_analyzer import CVAnalyzer
 from prompts.cv_prompts import CV_FEEDBACK_PROMPT
-from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+
+
 # DB tablolarını oluştur
 Base.metadata.create_all(bind=engine)
 
@@ -34,8 +34,9 @@ gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
 roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
 cv_analyzer = CVAnalyzer(gemini_api_key=settings.GEMINI_API_KEY)
 
+
 # ---------- Signup ----------
-@app.post("/signup", response_model=UserOut)
+@app.post("/signup", response_model=TokenUserResponse)
 def signup(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(
         (User.email == user.email) | (User.username == user.username)
@@ -54,28 +55,39 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return db_user
-@app.post("/login")
-def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
-    # `form_data` objesi `username` ve `password` alanlarına sahiptir.
-    # Bizim "username" alanımız hem email hem de kullanıcı adı olabildiği için
-    # kodu buna göre uyarlıyoruz.
+
+    # Kayıt sonrası otomatik token döndürmek istersek:
+    access_token = create_access_token(data={"sub": str(db_user.id)})
+    return {"user":db_user,"access_token": access_token, "token_type": "bearer"}
+
+# ---------- Login ----------
+@app.post("/login", response_model=TokenUserResponse)
+def login(login_data: LoginSchema, db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == form_data.username) | (User.username == form_data.username)
+        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
     ).first()
 
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, # 400 yerine 401 daha doğru olur
+            status_code=401,
             detail="Incorrect email/username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    return {
+        "user": user,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut)
-def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user_by_id(
+    user_id: int = Path(..., description="ID of the user to retrieve"),
+    db: Session = Depends(get_db)
+):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -97,7 +109,57 @@ def generate_roadmap(
     db.refresh(roadmap)
 
     return roadmap
+from fastapi import Query
 
+@app.get("/api/roadmaps/{roadmap_id}/summaries")
+def summarize_item(
+    roadmap_id: int,
+    item_id: str = Query(..., description="Left veya right item ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Roadmap'i çek
+    roadmap = db.query(Roadmap).filter(
+        Roadmap.id == roadmap_id,
+        Roadmap.user_id == current_user.id
+    ).first()
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+
+    # item_title ve center_node bul
+    topic_title = None
+    center_node_title = None
+    for stage in roadmap.content.get("mainStages", []):
+        for node in stage.get("subNodes", []):
+            for side in ["leftItems", "rightItems"]:
+                for item in node.get(side, []):
+                    if item.get("id") == item_id:
+                        topic_title = item.get("name")
+                        center_node_title = node.get("centralNodeTitle")
+                        break
+                if topic_title:
+                    break
+            if topic_title:
+                break
+        if topic_title:
+            break
+
+    if not topic_title:
+        raise HTTPException(status_code=404, detail="Item not found in roadmap.")
+
+    # SummaryCreator ile özet üret
+    summary = summary_creator.generate_summary(
+        roadmap_json=roadmap.content,
+        item_id=item_id
+    )
+
+    return {
+        "roadmap_id": roadmap.id,
+        "center_node": center_node_title,
+        "item_id": item_id,
+        "topic": topic_title,
+        "summary": summary
+    }
 @app.post("/api/cv/analyze", response_model=CVOut)
 async def analyze_cv(
     file: UploadFile = File(...),
