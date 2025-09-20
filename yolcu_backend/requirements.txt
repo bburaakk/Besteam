@@ -1,5 +1,4 @@
 fastapi
-uvicorn
 sqlalchemy
 psycopg2-binary
 pydantic
@@ -19,3 +18,4 @@ SQLAlchemy
 psycopg2-binary
 pydantic
 pydantic-settings
+

@@ -1,10 +1,13 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 import tempfile
 import os
 import json
+
+from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
+from yolcu_backend.generators.summary_creator import SummaryCreator
 from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, ProjectSuggestionResponse, LoginSchema, TokenUserResponse
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from yolcu_backend.settings import settings
@@ -34,11 +37,13 @@ app.add_middleware(
 # ---------- Services ----------
 gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
 roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
-cv_analyzer = CVAnalyzer(gemini_api_key=settings.GEMINI_API_KEY)
+cv_analyzer = CVAnalyzer(ai_service=gemini_service)
+summary_creator = SummaryCreator(ai_service=gemini_service)
+chat_service = RoadmapChatService(ai_service=gemini_service)
 project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
 
 # ---------- Signup ----------
-@app.post("/signup", response_model=UserOut)
+@app.post("/signup", response_model=TokenUserResponse)
 def signup(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(
         (User.email == user.email) | (User.username == user.username)
@@ -57,7 +62,10 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return db_user
+
+    # Kayıt sonrası otomatik token döndürmek istersek:
+    access_token = create_access_token(data={"sub": str(db_user.id)})
+    return {"user":db_user,"access_token": access_token, "token_type": "bearer"}
 
 # ---------- Login ----------
 @app.post("/login", response_model=TokenUserResponse)
@@ -83,7 +91,10 @@ def login(login_data: LoginSchema, db: Session = Depends(get_db)):
 
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut)
-def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user_by_id(
+    user_id: int = Path(..., description="ID of the user to retrieve"),
+    db: Session = Depends(get_db)
+):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -96,8 +107,8 @@ def generate_roadmap(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    generator = RoadmapGenerator(ai_service=gemini_service)
-    roadmap_json = generator.create_roadmap(request.field)
+    generator = RoadmapGenerator(ai_service=gemini_service)  # gemini_service DI yapılmalı
+    roadmap_json = generator.create_roadmap(request.field)   # dict döner
 
     roadmap = Roadmap(user_id=current_user.id, content=roadmap_json)
     db.add(roadmap)
@@ -105,6 +116,93 @@ def generate_roadmap(
     db.refresh(roadmap)
 
     return roadmap
+from fastapi import Query
+
+@app.get("/api/roadmaps/{roadmap_id}/summaries")
+def summarize_item(
+    roadmap_id: int,
+    item_id: str = Query(..., description="Left veya right item ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Roadmap'i çek
+    roadmap = db.query(Roadmap).filter(
+        Roadmap.id == roadmap_id,
+        Roadmap.user_id == current_user.id
+    ).first()
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+
+    # item_title ve center_node bul
+    topic_title = None
+    center_node_title = None
+    for stage in roadmap.content.get("mainStages", []):
+        for node in stage.get("subNodes", []):
+            for side in ["leftItems", "rightItems"]:
+                for item in node.get(side, []):
+                    if item.get("id") == item_id:
+                        topic_title = item.get("name")
+                        center_node_title = node.get("centralNodeTitle")
+                        break
+                if topic_title:
+                    break
+            if topic_title:
+                break
+        if topic_title:
+            break
+
+    if not topic_title:
+        raise HTTPException(status_code=404, detail="Item not found in roadmap.")
+
+    # SummaryCreator ile özet üret
+    summary = summary_creator.generate_summary(
+        roadmap_json=roadmap.content,
+        item_id=item_id
+    )
+
+    return {
+        "roadmap_id": roadmap.id,
+        "center_node": center_node_title,
+        "item_id": item_id,
+        "topic": topic_title,
+        "summary": summary
+    }
+
+@app.post("/api/roadmaps/{roadmap_id}/chat")
+def roadmap_chat(
+    roadmap_id: int,
+    question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Kullanıcının roadmap'ini getir
+    roadmap = db.query(Roadmap).filter(
+        Roadmap.id == roadmap_id,
+        Roadmap.user_id == current_user.id
+    ).first()
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+
+    # Konuları çıkar
+    topics = chat_service.extract_topics(roadmap.content)
+
+    # Soruyu eşleştir
+    matched_topic = chat_service.match_question_to_topic(question, topics)
+    if not matched_topic:
+        raise HTTPException(
+            status_code=400,
+            detail="Bu soru roadmap konularıyla ilgili değil. Lütfen roadmap konularına dair soru sorun."
+        )
+
+    # AI cevabı üret
+    answer = chat_service.generate_answer(question, matched_topic, roadmap.content)
+
+    return {
+        "roadmap_id": roadmap.id,
+        "topic": matched_topic,
+        "question": question,
+        "answer": answer
+    }
 
 # ---------- CV Analyze ----------
 @app.post("/api/cv/analyze", response_model=CVOut)
@@ -113,6 +211,7 @@ async def analyze_cv(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # --- Dosya kontrolü ---
     if not file.filename.lower().endswith(('.pdf', '.txt')):
         raise HTTPException(status_code=400, detail="Only PDF or TXT files allowed.")
 
@@ -121,12 +220,15 @@ async def analyze_cv(
         raise HTTPException(status_code=413, detail="File too large (max 5MB).")
 
     try:
+        # --- Geçici dosya oluştur ---
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
             temp_file.write(content)
             temp_path = temp_file.name
 
+        # --- CV içeriğini oku ---
         cv_text = cv_analyzer.read_cv(temp_path)
 
+        # --- ATS analizleri ---
         keywords_result = cv_analyzer.extract_keywords(cv_text)
         basic_score = cv_analyzer.ats_score_basic(cv_text, keywords_result["found"])
         advanced_score = cv_analyzer.ats_score_advanced(cv_text, keywords_result["found"])
@@ -134,8 +236,10 @@ async def analyze_cv(
         tips = cv_analyzer.get_ats_optimization_tips(advanced_score)
         feedback = cv_analyzer.generate_ai_feedback(cv_text, advanced_score)
 
+        # --- temp dosya temizliği ---
         os.unlink(temp_path)
 
+        # --- DB'ye kaydet ---
         cv_entry = CV(
             user_id=current_user.id,
             file_name=file.filename,
@@ -160,7 +264,6 @@ async def analyze_cv(
             os.unlink(temp_path)
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
 
-# ---------- Project Suggestions ----------
 # ---------- Project Suggestions ----------
 @app.get("/project-suggestions", response_model=ProjectSuggestionResponse)
 def get_project_suggestions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -212,4 +315,4 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("yolcu_backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8080)

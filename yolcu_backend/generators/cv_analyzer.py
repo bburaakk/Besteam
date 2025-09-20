@@ -12,8 +12,8 @@ DetectorFactory.seed = 0  # Dil tespiti deterministik olsun diye
 
 
 class CVAnalyzer:
-    def __init__(self, gemini_api_key: str):
-        self.gemini = GeminiService(api_key=gemini_api_key)
+    def __init__(self, ai_service: GeminiService):
+        self.gemini = ai_service
 
     # ------------------ CV Okuma ------------------
     def read_pdf(self, file_path: str) -> str:
