@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MainLayout } from '../components/templates';
 import { Heading, Button, Alert } from '../components/atoms';
+import { RoadmapMindmap } from '../components/molecules';
 import { roadmapService, handleApiError } from '../services';
 import type { RoadmapRequest, RoadmapResponse } from '../services';
 
@@ -55,8 +56,8 @@ const RoadmapPage: React.FC = () => {
 
   return (
     <MainLayout title="Yazılım Roadmap Oluşturucu">
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
           {/* Header */}
           <div className="text-center mb-12">
             <Heading level={1} className="text-4xl font-bold text-gray-900 mb-4">
@@ -122,19 +123,15 @@ const RoadmapPage: React.FC = () => {
             {/* Roadmap Display */}
             {roadmap && (
               <div className="mt-8 pt-8 border-t border-gray-200">
-                <Heading level={2} className="text-2xl font-semibold text-gray-900 mb-4">
-                  {SOFTWARE_FIELDS.find(f => f.value === roadmap.field)?.label} Roadmap
-                </Heading>
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <div className="prose max-w-none">
-                    <pre className="whitespace-pre-wrap text-gray-800 font-sans">
-                      {roadmap.content}
-                    </pre>
-                  </div>
-                  <div className="mt-4 text-sm text-gray-500">
-                    Oluşturulma Tarihi: {new Date(roadmap.createdAt).toLocaleDateString('tr-TR')}
+                <div className="mb-6">
+                  <Heading level={2} className="text-2xl font-semibold text-gray-900 mb-2">
+                    {roadmap.content.diagramTitle} Roadmap
+                  </Heading>
+                  <div className="text-sm text-gray-500">
+                    Oluşturulma Tarihi: {new Date(roadmap.created_at).toLocaleDateString('tr-TR')}
                   </div>
                 </div>
+                <RoadmapMindmap content={roadmap.content} roadmapId={roadmap.id} />
               </div>
             )}
           </div>

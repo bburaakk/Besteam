@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { MainLayout } from '../components/templates';
 import { Heading, Button, Alert } from '../components/atoms';
-import { FeedbackRenderer } from '../components/molecules';
 import { cvService, handleApiError } from '../services';
 import type { CVAnalysisResponse } from '../services';
 
@@ -228,7 +227,7 @@ const CVAnalysisPage: React.FC = () => {
             </div>
 
             {/* Analysis Results */}
-            {analysis && analysis.success && (
+            {analysis && (
               <div className="mt-8 pt-8 border-t border-gray-200">
                 <Heading level={2} className="text-2xl font-semibold text-gray-900 mb-6">
                   CV Analiz Sonuçları
@@ -240,7 +239,7 @@ const CVAnalysisPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">Analiz Edilen Dosya</h3>
-                        <p className="text-gray-600">{analysis.filename}</p>
+                        <p className="text-gray-600">{analysis.file_name}</p>
                       </div>
                       <div className="text-right">
                         <div className="flex items-center">
@@ -253,8 +252,20 @@ const CVAnalysisPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Detailed Feedback */}
-                  <FeedbackRenderer feedback={analysis.feedback} />
+                  {/* Final Score */}
+                  <div className="flex justify-center">
+                    <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-2xl p-8 text-center max-w-sm">
+                      <h4 className="text-2xl font-bold text-gray-800 mb-4">CV Puanınız</h4>
+                      <div className="text-6xl font-bold text-green-600 mb-2">{analysis.final_score.toFixed(1)}</div>
+                      <div className="text-gray-600 text-lg">/ 100</div>
+                      <div className="mt-4 text-sm text-gray-500">
+                        {analysis.final_score >= 80 ? '🎉 Mükemmel!' : 
+                         analysis.final_score >= 60 ? '👍 İyi!' : 
+                         analysis.final_score >= 40 ? '⚡ Geliştirilmeli' : 
+                         '🚀 Büyük Potansiyel'}
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Keywords Analysis */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -264,10 +275,10 @@ const CVAnalysisPage: React.FC = () => {
                         <svg className="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
-                        Bulunan Anahtar Kelimeler ({analysis.keywords.found.length})
+                        Bulunan Anahtar Kelimeler ({analysis.found_keywords.length})
                       </h3>
                       <div className="flex flex-wrap gap-2">
-                        {analysis.keywords.found.map((keyword, index) => (
+                        {analysis.found_keywords.map((keyword, index) => (
                           <span 
                             key={index}
                             className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
@@ -284,11 +295,11 @@ const CVAnalysisPage: React.FC = () => {
                         <svg className="w-5 h-5 text-orange-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
-                        Eksik Anahtar Kelimeler ({analysis.keywords.missing.length})
+                        Eksik Anahtar Kelimeler ({analysis.missing_keywords.length})
                       </h3>
-                      {analysis.keywords.missing.length > 0 ? (
+                      {analysis.missing_keywords.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
-                          {analysis.keywords.missing.map((keyword, index) => (
+                          {analysis.missing_keywords.map((keyword, index) => (
                             <span 
                               key={index}
                               className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium"
@@ -303,8 +314,39 @@ const CVAnalysisPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Tips Section */}
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-yellow-800 mb-4 flex items-center">
+                      <svg className="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      İyileştirme Önerileri ({analysis.tips.length})
+                    </h3>
+                    <ul className="space-y-2">
+                      {analysis.tips.map((tip, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-yellow-600 mr-3 mt-1">•</span>
+                          <span className="text-yellow-800 text-sm leading-relaxed">{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Detailed Feedback */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <svg className="w-5 h-5 text-gray-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
+                      </svg>
+                      Detaylı Geri Bildirim
+                    </h3>
+                    <div className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                      {analysis.feedback}
+                    </div>
+                  </div>
+
                   <div className="text-sm text-gray-500 text-center">
-                    Analiz Tarihi: {new Date().toLocaleDateString('tr-TR')}
+                    Analiz Tarihi: {new Date(analysis.created_at).toLocaleDateString('tr-TR')}
                   </div>
                 </div>
               </div>

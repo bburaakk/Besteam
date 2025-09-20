@@ -1,14 +1,20 @@
 import { apiClient } from './client';
 
 export interface CVAnalysisResponse {
-  success: boolean;
+  file_name: string;
+  content: string;
+  basic_score: number;
+  advanced_score: number;
+  final_score: number;
+  found_keywords: string[];
+  missing_keywords: string[];
   feedback: string;
-  keywords: {
-    found: string[];
-    missing: string[];
-  };
+  tips: string[];
+  language: string;
+  id: number;
   user_id: number;
-  filename: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export const cvService = {

@@ -54,7 +54,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </div>
           )}
           
-          <main className={`flex-1 px-4 sm:px-6 lg:px-10 w-full ${isAuthenticated ? 'py-12' : 'py-12'}`}>
+          <main className={`flex-1 px-2 sm:px-3 lg:px-4 w-full ${isAuthenticated ? 'py-8' : 'py-8'}`}>
             {children}
           </main>
         </div>
