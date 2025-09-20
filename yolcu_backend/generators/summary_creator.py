@@ -1,5 +1,5 @@
 import os
-from prompts.summary_prompts import SUMMARY_PROMPT
+from yolcu_backend.prompts.summary_prompts import SUMMARY_PROMPT
 
 class SummaryCreator:
     def __init__(self, ai_service):

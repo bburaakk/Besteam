@@ -1,6 +1,6 @@
 from difflib import get_close_matches
 from typing import List, Optional
-from prompts.roadmap_chat_prompt import ROADMAP_CHAT_PROMPT
+from yolcu_backend.prompts.roadmap_chat_prompt import ROADMAP_CHAT_PROMPT
 
 class RoadmapChatService:
     def __init__(self, ai_service):
