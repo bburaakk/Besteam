@@ -56,6 +56,7 @@ const Header: React.FC<HeaderProps> = ({
             {[
               { href: '/cv-analysis', label: 'CV Analizi' },
               { href: '/roadmap', label: 'Yol Haritası' },
+              { href: '/project-suggestions', label: 'Proje Önerileri' },
               { href: '#ogrenme', label: 'Öğrenme' },
               { href: '#topluluk', label: 'Topluluk' }
             ].map(item => (
@@ -105,6 +106,7 @@ const Header: React.FC<HeaderProps> = ({
               {[
                 { href: '/cv-analysis', label: 'CV Analizi' },
                 { href: '/roadmap', label: 'Yol Haritası' },
+                { href: '/project-suggestions', label: 'Proje Önerileri' },
                 { href: '#ogrenme', label: 'Öğrenme' },
                 { href: '#topluluk', label: 'Topluluk' }
               ].map(item => (

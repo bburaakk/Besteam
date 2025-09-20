@@ -25,6 +25,15 @@ export interface RoadmapRequest {
   field: string;
 }
 
+export interface ChatRequest {
+  question: string;
+}
+
+export interface ChatResponse {
+  answer: string;
+  question: string;
+}
+
 export interface RoadmapResponse {
   id: number;
   user_id: number;
@@ -36,6 +45,11 @@ export interface RoadmapResponse {
 export const roadmapService = {
   generateRoadmap: async (data: RoadmapRequest): Promise<RoadmapResponse> => {
     const response = await apiClient.post<RoadmapResponse>('/api/roadmaps/generate', data);
+    return response.data;
+  },
+
+  chatWithRoadmap: async (roadmapId: number, request: ChatRequest): Promise<ChatResponse> => {
+    const response = await apiClient.post<ChatResponse>(`/api/roadmaps/${roadmapId}/chat`, request);
     return response.data;
   },
 };
