@@ -38,7 +38,6 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       // Kullanıcı bilgilerini context'e kaydet (API'den gelen response'a göre)
       const user = {
         id: 1, // API'den gelen kullanıcı ID'si
-        email: values.email_or_username,
         username: values.email_or_username,
         firstName: undefined,
         lastName: undefined,

@@ -1,8 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-
 
 # ---------- User Schemas ----------
 class UserCreate(BaseModel):
@@ -79,3 +77,11 @@ class CVOut(CVBase):
 
     class Config:
         from_attributes = True
+
+# ---------- Project Suggestion Schemas ----------
+class ProjectSuggestion(BaseModel):
+    title: str
+    description: str
+
+class ProjectSuggestionResponse(BaseModel):
+    suggestions: List[ProjectSuggestion]
