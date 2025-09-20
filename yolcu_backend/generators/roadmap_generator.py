@@ -1,7 +1,7 @@
 import json
 import re
-from ..services import GeminiService
-from ..prompts import VISUAL_PROMPT_TEMPLATE
+from yolcu_backend.services.ai_service import GeminiService
+from yolcu_backend.prompts.roadmap_prompts import VISUAL_PROMPT_TEMPLATE
 
 class RoadmapGenerator:
     def __init__(self, ai_service: GeminiService):

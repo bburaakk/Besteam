@@ -1,19 +1,21 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 import tempfile
 import os
-from typing import Annotated
-from .database import engine, Base
-from .models import User, Roadmap, CV
-from .schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, ProjectSuggestionResponse
-from .auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
-from .settings import settings
-from .services import GeminiService
-from .generators import RoadmapGenerator, CVAnalyzer, ProjectSuggestionGenerator
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from .services import db_service
+import json
+from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, ProjectSuggestionResponse, LoginSchema, TokenUserResponse
+from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
+from yolcu_backend.settings import settings
+from yolcu_backend.services.ai_service import GeminiService
+from yolcu_backend.generators.roadmap_generator import RoadmapGenerator
+from yolcu_backend.generators.cv_analyzer import CVAnalyzer
+from yolcu_backend.generators.project_suggestion_generator import ProjectSuggestionGenerator
+from yolcu_backend.services import db_service
+from yolcu_backend.models import User, Roadmap, CV
+from yolcu_backend.database import engine, Base
+
 
 # DB tablolarını oluştur
 Base.metadata.create_all(bind=engine)
@@ -57,21 +59,27 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return db_user
 
-@app.post("/login")
-def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
+# ---------- Login ----------
+@app.post("/login", response_model=TokenUserResponse)
+def login(login_data: LoginSchema, db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == form_data.username) | (User.username == form_data.username)
+        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
     ).first()
 
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=401,
             detail="Incorrect email/username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    return {
+        "user": user,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
 
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut)
@@ -153,6 +161,7 @@ async def analyze_cv(
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
 
 # ---------- Project Suggestions ----------
+# ---------- Project Suggestions ----------
 @app.get("/project-suggestions", response_model=ProjectSuggestionResponse)
 def get_project_suggestions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -161,18 +170,44 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
         if not titles:
             raise HTTPException(status_code=404, detail="No roadmap titles found for the current user. Please create a roadmap first.")
 
-        # 2. Generate suggestions using the generator
-        suggestions_str = project_suggestion_generator.generate_suggestions(titles)
-        suggestions_list = [s.strip() for s in suggestions_str.split('\n') if s.strip()]
+        print(f"Found titles for user {current_user.id}: {titles}")
 
-        # 3. Return the suggestions
-        return {"suggestions": suggestions_list}
+        # 2. Generate suggestions as a JSON string
+        suggestions_json_str = project_suggestion_generator.generate_suggestions(titles)
+
+        # 3. Parse the JSON string into a Python list of dictionaries
+        try:
+            suggestions_data = json.loads(suggestions_json_str)
+            print(f"Successfully parsed JSON: {suggestions_data}")
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON from AI service: {e}")
+            print(f"Raw response was: {repr(suggestions_json_str)}")
+            raise HTTPException(status_code=500, detail="Failed to parse project suggestions from AI service.")
+
+        # 4. Validate and format the suggestions - title ve description ayrı ayrı
+        formatted_suggestions = []
+        for item in suggestions_data:
+            if isinstance(item, dict) and 'title' in item and 'description' in item:
+                formatted_suggestions.append({
+                    "title": item['title'],
+                    "description": item['description']
+                })
+            else:
+                print(f"Warning: Invalid suggestion format: {item}")
+
+        if not formatted_suggestions:
+            print("Warning: No valid suggestions found in AI response")
+            raise HTTPException(status_code=500, detail="No valid project suggestions could be generated.")
+
+        # 5. Return the structured suggestions
+        return {"suggestions": formatted_suggestions}
 
     except HTTPException as e:
-        # Re-raise HTTP exceptions
         raise e
     except Exception as e:
-        print(f"Error generating project suggestions: {e}")
+        print(f"Unexpected error in get_project_suggestions: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
 
 if __name__ == "__main__":

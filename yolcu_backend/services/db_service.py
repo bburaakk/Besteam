@@ -1,7 +1,7 @@
 import json
 import logging
 from sqlalchemy.orm import Session
-from ..models import Roadmap
+from yolcu_backend.models import Roadmap
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

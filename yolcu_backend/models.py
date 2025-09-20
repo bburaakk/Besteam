@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, TIMESTAMP, func, Numeric
 from sqlalchemy.orm import relationship
-from .database import Base
+from yolcu_backend.database import Base
 from sqlalchemy.dialects.postgresql import JSONB
 
 

@@ -5,8 +5,8 @@ import json
 from typing import List, Dict, Any
 from langdetect import detect, DetectorFactory
 from collections import Counter
-from ..services.ai_service import GeminiService
-from ..prompts.cv_prompts import CV_FEEDBACK_PROMPT
+from yolcu_backend.services.ai_service import GeminiService
+from yolcu_backend.prompts.cv_prompts import CV_FEEDBACK_PROMPT
 
 DetectorFactory.seed = 0  # Dil tespiti deterministik olsun diye
 
