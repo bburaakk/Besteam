@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
 from typing import Any, Dict,List, Optional
 
@@ -9,7 +8,7 @@ class UserCreate(BaseModel):
     last_name: str
     username: str
     email: str
-    password_hash: str
+    password: str
 
 class UserOut(BaseModel):
     id: int
@@ -23,6 +22,11 @@ class UserOut(BaseModel):
     
     class Config:
         from_attributes = True
+
+class TokenUserResponse(BaseModel):
+    user: UserOut
+    access_token: str
+    token_type: str
 
 class LoginSchema(BaseModel):
     email_or_username: str
@@ -67,3 +71,11 @@ class CVOut(CVBase):
 
     class Config:
         from_attributes = True
+
+# ---------- Project Suggestion Schemas ----------
+class ProjectSuggestion(BaseModel):
+    title: str
+    description: str
+
+class ProjectSuggestionResponse(BaseModel):
+    suggestions: List[ProjectSuggestion]

@@ -1,20 +1,22 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 import tempfile
 import os
-from database import SessionLocal, engine, Base
-from models import User, Roadmap, CV
-from schemas import UserCreate, UserOut, LoginSchema, TopicRequest, RoadmapOut, CVOut
-from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
-from settings import settings
-from services.ai_service import GeminiService
-from generators.roadmap_generator import RoadmapGenerator
-from generators.cv_analyzer import CVAnalyzer
-from prompts.cv_prompts import CV_FEEDBACK_PROMPT
-from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+import json
+from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, ProjectSuggestionResponse, LoginSchema, TokenUserResponse
+from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
+from yolcu_backend.settings import settings
+from yolcu_backend.services.ai_service import GeminiService
+from yolcu_backend.generators.roadmap_generator import RoadmapGenerator
+from yolcu_backend.generators.cv_analyzer import CVAnalyzer
+from yolcu_backend.generators.project_suggestion_generator import ProjectSuggestionGenerator
+from yolcu_backend.services import db_service
+from yolcu_backend.models import User, Roadmap, CV
+from yolcu_backend.database import engine, Base
+
+
 # DB tablolarını oluştur
 Base.metadata.create_all(bind=engine)
 
@@ -33,6 +35,7 @@ app.add_middleware(
 gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
 roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
 cv_analyzer = CVAnalyzer(gemini_api_key=settings.GEMINI_API_KEY)
+project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
 
 # ---------- Signup ----------
 @app.post("/signup", response_model=UserOut)
@@ -55,24 +58,29 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     return db_user
-@app.post("/login")
-def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
-    # `form_data` objesi `username` ve `password` alanlarına sahiptir.
-    # Bizim "username" alanımız hem email hem de kullanıcı adı olabildiği için
-    # kodu buna göre uyarlıyoruz.
+
+# ---------- Login ----------
+@app.post("/login", response_model=TokenUserResponse)
+def login(login_data: LoginSchema, db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == form_data.username) | (User.username == form_data.username)
+        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
     ).first()
 
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, # 400 yerine 401 daha doğru olur
+            status_code=401,
             detail="Incorrect email/username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    return {
+        "user": user,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)):
@@ -88,8 +96,8 @@ def generate_roadmap(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    generator = RoadmapGenerator(ai_service=gemini_service)  # gemini_service DI yapılmalı
-    roadmap_json = generator.create_roadmap(request.field)   # dict döner
+    generator = RoadmapGenerator(ai_service=gemini_service)
+    roadmap_json = generator.create_roadmap(request.field)
 
     roadmap = Roadmap(user_id=current_user.id, content=roadmap_json)
     db.add(roadmap)
@@ -98,13 +106,13 @@ def generate_roadmap(
 
     return roadmap
 
+# ---------- CV Analyze ----------
 @app.post("/api/cv/analyze", response_model=CVOut)
 async def analyze_cv(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # --- Dosya kontrolü ---
     if not file.filename.lower().endswith(('.pdf', '.txt')):
         raise HTTPException(status_code=400, detail="Only PDF or TXT files allowed.")
 
@@ -113,15 +121,12 @@ async def analyze_cv(
         raise HTTPException(status_code=413, detail="File too large (max 5MB).")
 
     try:
-        # --- Geçici dosya oluştur ---
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
             temp_file.write(content)
             temp_path = temp_file.name
 
-        # --- CV içeriğini oku ---
         cv_text = cv_analyzer.read_cv(temp_path)
 
-        # --- ATS analizleri ---
         keywords_result = cv_analyzer.extract_keywords(cv_text)
         basic_score = cv_analyzer.ats_score_basic(cv_text, keywords_result["found"])
         advanced_score = cv_analyzer.ats_score_advanced(cv_text, keywords_result["found"])
@@ -129,10 +134,8 @@ async def analyze_cv(
         tips = cv_analyzer.get_ats_optimization_tips(advanced_score)
         feedback = cv_analyzer.generate_ai_feedback(cv_text, advanced_score)
 
-        # --- temp dosya temizliği ---
         os.unlink(temp_path)
 
-        # --- DB'ye kaydet ---
         cv_entry = CV(
             user_id=current_user.id,
             file_name=file.filename,
@@ -157,6 +160,56 @@ async def analyze_cv(
             os.unlink(temp_path)
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
 
+# ---------- Project Suggestions ----------
+# ---------- Project Suggestions ----------
+@app.get("/project-suggestions", response_model=ProjectSuggestionResponse)
+def get_project_suggestions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        # 1. Fetch titles from the user's latest roadmap
+        titles = db_service.get_centralnode_titles(db, user_id=current_user.id)
+        if not titles:
+            raise HTTPException(status_code=404, detail="No roadmap titles found for the current user. Please create a roadmap first.")
+
+        print(f"Found titles for user {current_user.id}: {titles}")
+
+        # 2. Generate suggestions as a JSON string
+        suggestions_json_str = project_suggestion_generator.generate_suggestions(titles)
+
+        # 3. Parse the JSON string into a Python list of dictionaries
+        try:
+            suggestions_data = json.loads(suggestions_json_str)
+            print(f"Successfully parsed JSON: {suggestions_data}")
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON from AI service: {e}")
+            print(f"Raw response was: {repr(suggestions_json_str)}")
+            raise HTTPException(status_code=500, detail="Failed to parse project suggestions from AI service.")
+
+        # 4. Validate and format the suggestions - title ve description ayrı ayrı
+        formatted_suggestions = []
+        for item in suggestions_data:
+            if isinstance(item, dict) and 'title' in item and 'description' in item:
+                formatted_suggestions.append({
+                    "title": item['title'],
+                    "description": item['description']
+                })
+            else:
+                print(f"Warning: Invalid suggestion format: {item}")
+
+        if not formatted_suggestions:
+            print("Warning: No valid suggestions found in AI response")
+            raise HTTPException(status_code=500, detail="No valid project suggestions could be generated.")
+
+        # 5. Return the structured suggestions
+        return {"suggestions": formatted_suggestions}
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Unexpected error in get_project_suggestions: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("yolcu_backend.main:app", host="0.0.0.0", port=8000, reload=True)
