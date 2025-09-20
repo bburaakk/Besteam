@@ -96,9 +96,6 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     });
   }, [transform]);
 
-  const resetView = useCallback(() => {
-    setTransform({ x: 0, y: 0, scale: 1 });
-  }, []);
 
   const fetchSummary = useCallback(async (itemTitle: string, clickEvent: React.MouseEvent, itemId: string) => {
     setIsLoadingSummary(true);
