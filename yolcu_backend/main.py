@@ -12,7 +12,8 @@ from settings import settings
 from services.ai_service import GeminiService
 from generators.roadmap_generator import RoadmapGenerator
 from generators.cv_analyzer import CVAnalyzer
-from prompts.cv_prompts import CV_FEEDBACK_PROMPT
+from generators.summary_creator import SummaryCreator
+from generators.roadmap_chat_service import RoadmapChatService
 
 
 # DB tablolarını oluştur
@@ -31,8 +32,11 @@ app.add_middleware(
 
 # ---------- Services ----------
 gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
+
 roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
-cv_analyzer = CVAnalyzer(gemini_api_key=settings.GEMINI_API_KEY)
+cv_analyzer = CVAnalyzer(ai_service=gemini_service)
+summary_creator = SummaryCreator(ai_service=gemini_service)
+chat_service = RoadmapChatService(ai_service=gemini_service)
 
 
 # ---------- Signup ----------
@@ -160,6 +164,43 @@ def summarize_item(
         "topic": topic_title,
         "summary": summary
     }
+
+@app.post("/api/roadmaps/{roadmap_id}/chat")
+def roadmap_chat(
+    roadmap_id: int,
+    question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Kullanıcının roadmap'ini getir
+    roadmap = db.query(Roadmap).filter(
+        Roadmap.id == roadmap_id,
+        Roadmap.user_id == current_user.id
+    ).first()
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+
+    # Konuları çıkar
+    topics = chat_service.extract_topics(roadmap.content)
+
+    # Soruyu eşleştir
+    matched_topic = chat_service.match_question_to_topic(question, topics)
+    if not matched_topic:
+        raise HTTPException(
+            status_code=400,
+            detail="Bu soru roadmap konularıyla ilgili değil. Lütfen roadmap konularına dair soru sorun."
+        )
+
+    # AI cevabı üret
+    answer = chat_service.generate_answer(question, matched_topic, roadmap.content)
+
+    return {
+        "roadmap_id": roadmap.id,
+        "topic": matched_topic,
+        "question": question,
+        "answer": answer
+    }
+
 @app.post("/api/cv/analyze", response_model=CVOut)
 async def analyze_cv(
     file: UploadFile = File(...),
@@ -221,4 +262,4 @@ async def analyze_cv(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
