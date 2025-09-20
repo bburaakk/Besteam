@@ -1,11 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Path, Body
+from fastapi import FastAPI, UploadFile, File, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 import tempfile
 import os
 import json
-
 from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.summary_creator import SummaryCreator
 from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, ProjectSuggestionResponse, LoginSchema, TokenUserResponse
@@ -16,7 +15,7 @@ from yolcu_backend.generators.roadmap_generator import RoadmapGenerator
 from yolcu_backend.generators.cv_analyzer import CVAnalyzer
 from yolcu_backend.generators.project_suggestion_generator import ProjectSuggestionGenerator
 from yolcu_backend.services import db_service
-from yolcu_backend.models import User, Roadmap, CV
+from yolcu_backend.models import User, Roadmap, CV, Project
 from yolcu_backend.database import engine, Base
 
 
@@ -278,7 +277,7 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
         # 2. Generate suggestions as a JSON string
         suggestions_json_str = project_suggestion_generator.generate_suggestions(titles)
 
-        # 3. Parse the JSON string into a Python list of dictionaries
+        # 3. Parse the JSON string into a Python dictionary
         try:
             suggestions_data = json.loads(suggestions_json_str)
             print(f"Successfully parsed JSON: {suggestions_data}")
@@ -287,23 +286,26 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
             print(f"Raw response was: {repr(suggestions_json_str)}")
             raise HTTPException(status_code=500, detail="Failed to parse project suggestions from AI service.")
 
-        # 4. Validate and format the suggestions - title ve description ayrı ayrı
-        formatted_suggestions = []
-        for item in suggestions_data:
-            if isinstance(item, dict) and 'title' in item and 'description' in item:
-                formatted_suggestions.append({
-                    "title": item['title'],
-                    "description": item['description']
-                })
-            else:
-                print(f"Warning: Invalid suggestion format: {item}")
-
-        if not formatted_suggestions:
-            print("Warning: No valid suggestions found in AI response")
+        # 4. Validate and save the suggestions to the database
+        if not suggestions_data or "project_levels" not in suggestions_data:
+            print("Warning: No valid project levels found in AI response")
             raise HTTPException(status_code=500, detail="No valid project suggestions could be generated.")
 
+        for level in suggestions_data.get("project_levels", []):
+            for project_idea in level.get("projects", []):
+                if "title" in project_idea and "description" in project_idea:
+                    new_project = Project(
+                        user_id=current_user.id,
+                        title=project_idea["title"],
+                        description=project_idea["description"]
+                    )
+                    db.add(new_project)
+
+        db.commit()
+        print(f"Successfully saved {len(suggestions_data.get("project_levels", []))} levels of project suggestions for user {current_user.id}")
+
         # 5. Return the structured suggestions
-        return {"suggestions": formatted_suggestions}
+        return suggestions_data
 
     except HTTPException as e:
         raise e

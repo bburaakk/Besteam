@@ -83,5 +83,9 @@ class ProjectSuggestion(BaseModel):
     title: str
     description: str
 
+class ProjectLevel(BaseModel):
+    level_name: str
+    projects: List[ProjectSuggestion]
+
 class ProjectSuggestionResponse(BaseModel):
-    suggestions: List[ProjectSuggestion]
+    project_levels: List[ProjectLevel]
