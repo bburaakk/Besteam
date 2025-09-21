@@ -7,7 +7,7 @@ import 'highlight.js/styles/github-dark.css';
 import { MainLayout } from '../components/templates';
 import { Heading, Button, Alert } from '../components/atoms';
 import { summaryService, roadmapService, handleApiError } from '../services';
-import type { SummaryResponse, ChatRequest, ChatResponse } from '../services';
+import type { SummaryResponse, ChatRequest } from '../services';
 
 const RoadmapDetailPage: React.FC = () => {
   const { roadmapId, itemId } = useParams<{ roadmapId: string; itemId: string }>();
