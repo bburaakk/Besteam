@@ -1,12 +1,12 @@
 import { apiClient } from './client';
 
-export interface ProjectSuggestion {
+export interface ProjectSuggestionItem {
   title: string;
   description: string;
 }
 
 export interface ProjectSuggestionsResponse {
-  suggestions: ProjectSuggestion[];
+  suggestions: ProjectSuggestionItem[];
 }
 
 export const projectSuggestionsService = {

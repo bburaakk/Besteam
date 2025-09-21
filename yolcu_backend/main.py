@@ -1,6 +1,7 @@
 
 import os
 import json
+
 import tempfile
 from typing import List, Annotated
 
@@ -12,6 +13,15 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 # --- Imports from yolcu_backend ---
+
+import traceback
+from yolcu_backend.generators.project_evaluator import ProjectEvaluator
+from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
+from yolcu_backend.generators.summary_creator import SummaryCreator
+from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
+from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, LoginSchema, TokenUserResponse , ProjectOut, ProjectSuggestionResponse, ProjectLevel, ProjectIdea, QuizRequest, QuizResponse
+from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
+
 from yolcu_backend.settings import settings
 from yolcu_backend.database import engine as yolcu_engine, Base as YolcuBase
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
@@ -27,6 +37,11 @@ from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.project_suggestion_generator import ProjectSuggestionGenerator
 from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
 from yolcu_backend.services import db_service
+from yolcu_backend.generators.quiz_generator import QuizGenerator
+from yolcu_backend.services import db_service
+from yolcu_backend.models import User, Roadmap, CV, Project, Quiz
+from yolcu_backend.database import engine, Base
+
 
 # --- Imports from hackathon project ---
 from yolcu_backend.database import engine as hackathon_engine, SessionLocal
@@ -66,6 +81,7 @@ cv_analyzer = CVAnalyzer(ai_service=gemini_service)
 summary_creator = SummaryCreator(ai_service=gemini_service)
 chat_service = RoadmapChatService(ai_service=gemini_service)
 project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
+
 
 
 # --- Startup Event (from hackathon project) ---
@@ -118,6 +134,9 @@ def on_startup():
 # =================================================================
 # ========== YOLCU BACKEND ENDPOINTS ==============================
 # =================================================================
+
+project_evaluator = ProjectEvaluator(ai_service=gemini_service)
+quiz_generator = QuizGenerator(ai_service=gemini_service)
 
 # ---------- Signup ----------
 @app.post("/signup", response_model=TokenUserResponse, tags=["Authentication"])
@@ -364,6 +383,7 @@ def read_team_messages(team_id: int, current_user_id: int, db: Session = Depends
     return crud.get_team_messages(db, team_id=team_id)
 
 
+
 # ---------- WebSocket Endpoint for Chat ----------
 @app.websocket("/ws/{chat_type}/{item_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, chat_type: str, item_id: int, user_id: int):
@@ -404,6 +424,54 @@ async def websocket_endpoint(websocket: WebSocket, chat_type: str, item_id: int,
     finally:
         db.close()
 
+# ---------- Quiz ----------
+@app.post("/api/quizzes/generate", response_model=QuizResponse, tags=["Quizzes"])
+def generate_quiz(
+    request: QuizRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generates a 5-level quiz based on roadmap items, saves it to the database,
+    and returns the full quiz in JSON format.
+    """
+    try:
+        # Check if roadmap belongs to the user
+        roadmap = db.query(Roadmap).filter(
+            Roadmap.id == request.roadmap_id,
+            Roadmap.user_id == current_user.id
+        ).first()
+        if not roadmap:
+            raise HTTPException(status_code=404, detail="Roadmap not found or access denied.")
+
+        print(f"Quiz API endpoint called for roadmap_id: {request.roadmap_id}")
+        
+        # 1. Generate the quiz content from the AI service
+        quiz_data = quiz_generator.create_quiz(
+            roadmap_id=request.roadmap_id,
+            rightItems=request.rightItems,
+            leftItems=request.leftItems
+        )
+
+
+        # 2. Parse the generated data and save it to the database
+        for level_data in quiz_data.get("levels", []):
+            level_title = level_data.get("levelTitle", "Unknown Level")
+            for question_data in level_data.get("questions", []):
+                new_question = Quiz(
+                    roadmap_id=request.roadmap_id,
+                    question=question_data.get("question"),
+                    level=level_title,
+                    options=question_data.get("options"),
+                    answer=question_data.get("answer")
+                )
+                db.add(new_question)
+        
+        db.commit()
+        
+        # 3. Return the full quiz data to the frontend
+        return quiz_data
+
 
 # =================================================================
 # ========== APPLICATION RUNNER ===================================
@@ -421,3 +489,4 @@ if __name__ == "__main__":
 
     # Running on port 8000 with auto-reload, as specified in the hackathon project.
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+

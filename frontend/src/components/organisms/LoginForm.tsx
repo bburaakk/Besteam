@@ -35,16 +35,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
     try {
       const response = await authService.login(loginData);
       
-      // Kullanıcı bilgilerini context'e kaydet (API'den gelen response'a göre)
-      const user = {
-        id: 1, // API'den gelen kullanıcı ID'si
-        username: values.email_or_username,
-        firstName: undefined,
-        lastName: undefined,
-      };
+      // API'dan gelen user verisini direkt kullan
+      const user = response.user;
       
       // Token'ı localStorage'a kaydet
-      if (response.access_token) {
+      if (response.access_token && user) {
         localStorage.setItem('token', response.access_token);
         localStorage.setItem('user', JSON.stringify(user));
       }

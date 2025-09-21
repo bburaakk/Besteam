@@ -6,7 +6,6 @@ const HeroSection: React.FC = () => {
   
   return (
     <section className="-mx-4 sm:-mx-6 lg:-mx-10 relative min-h-[95vh] flex items-center overflow-hidden">
-      {/* Enhanced Gradient Mesh Background */}
       <div className="absolute inset-0">
         <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-gradient-to-br from-primary/40 to-purple-500/30 blur-3xl animate-pulse" />
         <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-gradient-to-tr from-emerald-500/40 to-accent/30 blur-3xl animate-pulse" />
@@ -16,18 +15,7 @@ const HeroSection: React.FC = () => {
       
       <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Left Content - Enhanced */}
-          <div className="text-center lg:text-left space-y-8">
-            {/* Trust Badge */}
-            <div className="inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-primary/15 to-purple-500/15 border border-primary/30 px-6 py-3 backdrop-blur-sm">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-              </span>
-              <span className="text-sm font-bold text-primary">10,000+ profesyonel güveniyor</span>
-              <div className="h-4 w-px bg-primary/30" />
-              <span className="text-xs text-gray-600">Aktif kullanıcı</span>
-            </div>
+          <div className="text-center lg:text-left space-y-8">            
             
             {/* Main Heading */}
             <div className="space-y-4">
@@ -68,45 +56,10 @@ const HeroSection: React.FC = () => {
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary-700 via-purple-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </button>
               
-              <button className="group px-10 py-5 rounded-2xl bg-white/90 backdrop-blur-xl border-2 border-gray-200 text-gray-900 font-bold text-lg hover:bg-white hover:border-primary/40 hover:shadow-xl transition-all duration-300">
-                <span className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Demo İzle
-                </span>
-              </button>
+              
             </div>
             
-            {/* Enhanced Trust Indicators */}
-            <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8 justify-center lg:justify-start pt-6">
-              <div className="flex -space-x-2 sm:-space-x-3">
-                {[
-                  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=48&h=48&fit=crop&crop=face',
-                  'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=48&h=48&fit=crop&crop=face',
-                  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=48&h=48&fit=crop&crop=face',
-                  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=48&h=48&fit=crop&crop=face',
-                  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=48&h=48&fit=crop&crop=face'
-                ].map((src, i) => (
-                  <img 
-                    key={i} 
-                    src={src} 
-                    alt={`Kullanıcı ${i+1}`} 
-                    className="h-10 w-10 sm:h-12 sm:w-12 rounded-full border-2 sm:border-3 border-white object-cover shadow-lg hover:scale-110 transition-transform cursor-pointer" 
-                  />
-                ))}
-                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full border-2 sm:border-3 border-white bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg">
-                  +5K
-                </div>
-              </div>
-              
-              <div className="text-center lg:text-left">
-                <div className="flex text-yellow-400 text-base sm:text-lg justify-center lg:justify-start">
-                  {'★★★★★'.split('').map((star, i) => <span key={i} className="drop-shadow-sm">{star}</span>)}
-                </div>
-                <p className="text-sm text-gray-600 font-medium">4.9/5 • 2,847 değerlendirme</p>
-              </div>
-            </div>
+           
           </div>
           
             {/* Right Visual - Enhanced */}
