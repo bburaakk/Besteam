@@ -1,17 +1,11 @@
-from typing import Annotated
-
 from fastapi import FastAPI, UploadFile, File, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import tempfile
 import os
 import json
 import traceback
-from starlette import status
-
-
 from yolcu_backend.generators.project_evaluator import ProjectEvaluator
 from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.summary_creator import SummaryCreator
