@@ -7,6 +7,7 @@ import os
 import json
 from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.summary_creator import SummaryCreator
+from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
 from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, ProjectSuggestionResponse, LoginSchema, TokenUserResponse
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from yolcu_backend.settings import settings
@@ -314,6 +315,23 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
+
+# ---------- Motivational ----------
+@app.get("/motivational-message")
+async def get_motivational_message():
+    try:
+        response = gemini_service.generate_content(MOTIVATIONAL_PROMPT)
+
+        return {"message": response}
+
+    except Exception as e:
+        print(f"Motivasyon Mesajı Hatası: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Harika projeler seni bekliyor, haydi başlayalım!"
+        )
+
+
 
 if __name__ == "__main__":
     import uvicorn
