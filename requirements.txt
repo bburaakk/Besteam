@@ -1,22 +1,27 @@
-fastapi
-sqlalchemy
-psycopg2-binary
-pydantic
-python-jose[cryptography]
-passlib[bcrypt]
-python-multipart
-google-generativeai
-fitz
-PyMuPDF
-langdetect
-google-generativeai
-passlib[bcrypt]
-python-jose
+# Web Framework
 fastapi
 uvicorn
-SQLAlchemy
+
+# Veritabanı
+sqlalchemy
 psycopg2-binary
+
+# Veri Doğrulama ve Ayarlar
 pydantic
 pydantic-settings
+
+# Kimlik Doğrulama
+python-jose[cryptography]
+passlib[bcrypt]
+
+# Dosya Yükleme, PDF ve Karakter Kodlaması
+python-multipart
+PyMuPDF
 chardet
-tools
+
+# Yapay Zeka ve Dil Tespiti
+google-generativeai
+langdetect
+
+# Ortam Değişkenleri
+python-dotenv
