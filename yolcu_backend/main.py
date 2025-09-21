@@ -7,6 +7,7 @@ import os
 import json
 from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.summary_creator import SummaryCreator
+from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
 from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, ProjectSuggestionResponse, LoginSchema, TokenUserResponse
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from yolcu_backend.settings import settings
@@ -315,46 +316,24 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
 
-#----------------Roadmap Chat-------------------------
-@app.post("/api/roadmaps/{roadmap_id}/chat")
-def roadmap_chat(
-    roadmap_id: int,
-    question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Kullanıcının roadmap'ini getir
-    roadmap = db.query(Roadmap).filter(
-        Roadmap.id == roadmap_id,
-        Roadmap.user_id == current_user.id
-    ).first()
-    if not roadmap:
-        raise HTTPException(status_code=404, detail="Roadmap not found")
+# ---------- Motivational ----------
+@app.get("/motivational-message")
+async def get_motivational_message():
+    try:
+        response = gemini_service.generate_content(MOTIVATIONAL_PROMPT)
 
-    # Roadmap konularını çıkar
-    topics = chat_service.extract_topics(roadmap.content)
+        return {"message": response}
 
-    # Soruyu roadmap konularıyla eşleştir
-    matched_topic = chat_service.match_question_to_topic(question, topics)
+    except Exception as e:
+        print(f"Motivasyon Mesajı Hatası: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Harika projeler seni bekliyor, haydi başlayalım!"
+        )
 
-    # Eğer konu bulunamazsa kullanıcıyı uyar
-    if not matched_topic:
-        return {
-            "roadmap_id": roadmap.id,
-            "topic": None,
-            "question": question,
-            "answer": "Lütfen sadece roadmap konularına dair bir soru sorun."
-        }
 
-    # AI cevabını üret
-    answer = chat_service.generate_answer(question, matched_topic, roadmap.content)
 
-    return {
-        "roadmap_id": roadmap.id,
-        "topic": matched_topic,
-        "question": question,
-        "answer": answer
-    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
