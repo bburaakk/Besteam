@@ -32,6 +32,8 @@ class Roadmap(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="roadmaps")
+    quizzes = relationship("Quiz", back_populates="roadmap", cascade="all, delete-orphan")
+
 class CV(Base):
     __tablename__ = "cvs"
 
@@ -68,3 +70,17 @@ class Project(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="projects")
+
+class Quiz(Base):
+    __tablename__ = "quizzes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    roadmap_id = Column(Integer, ForeignKey("roadmaps.id", ondelete="CASCADE"), nullable=False)
+    question = Column(Text, nullable=False)
+    level = Column(String(50), nullable=False)
+    options = Column(JSONB, nullable=False)
+    answer = Column(Text, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    roadmap = relationship("Roadmap", back_populates="quizzes")

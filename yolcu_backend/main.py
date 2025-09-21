@@ -10,15 +10,16 @@ from yolcu_backend.generators.project_evaluator import ProjectEvaluator
 from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.summary_creator import SummaryCreator
 from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
-from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, LoginSchema, TokenUserResponse , ProjectOut, ProjectSuggestionResponse, ProjectLevel, ProjectIdea
+from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, LoginSchema, TokenUserResponse , ProjectOut, ProjectSuggestionResponse, ProjectLevel, ProjectIdea, QuizRequest, QuizResponse
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from yolcu_backend.settings import settings
 from yolcu_backend.services.ai_service import GeminiService
 from yolcu_backend.generators.roadmap_generator import RoadmapGenerator
 from yolcu_backend.generators.cv_analyzer import CVAnalyzer
 from yolcu_backend.generators.project_suggestion_generator import ProjectSuggestionGenerator
+from yolcu_backend.generators.quiz_generator import QuizGenerator
 from yolcu_backend.services import db_service
-from yolcu_backend.models import User, Roadmap, CV, Project
+from yolcu_backend.models import User, Roadmap, CV, Project, Quiz
 from yolcu_backend.database import engine, Base
 
 
@@ -44,6 +45,7 @@ summary_creator = SummaryCreator(ai_service=gemini_service)
 chat_service = RoadmapChatService(ai_service=gemini_service)
 project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
 project_evaluator = ProjectEvaluator(ai_service=gemini_service)
+quiz_generator = QuizGenerator(ai_service=gemini_service)
 
 # ---------- Signup ----------
 @app.post("/signup", response_model=TokenUserResponse)
@@ -389,8 +391,60 @@ async def get_motivational_message():
             detail="Harika projeler seni bekliyor, haydi başlayalım!"
         )
 
+# ---------- Quiz ----------
+@app.post("/api/quizzes/generate", response_model=QuizResponse, tags=["Quizzes"])
+def generate_quiz(
+    request: QuizRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generates a 5-level quiz based on roadmap items, saves it to the database,
+    and returns the full quiz in JSON format.
+    """
+    try:
+        # Check if roadmap belongs to the user
+        roadmap = db.query(Roadmap).filter(
+            Roadmap.id == request.roadmap_id,
+            Roadmap.user_id == current_user.id
+        ).first()
+        if not roadmap:
+            raise HTTPException(status_code=404, detail="Roadmap not found or access denied.")
 
+        print(f"Quiz API endpoint called for roadmap_id: {request.roadmap_id}")
+        
+        # 1. Generate the quiz content from the AI service
+        quiz_data = quiz_generator.create_quiz(
+            roadmap_id=request.roadmap_id,
+            rightItems=request.rightItems,
+            leftItems=request.leftItems
+        )
 
+        # 2. Parse the generated data and save it to the database
+        for level_data in quiz_data.get("levels", []):
+            level_title = level_data.get("levelTitle", "Unknown Level")
+            for question_data in level_data.get("questions", []):
+                new_question = Quiz(
+                    roadmap_id=request.roadmap_id,
+                    question=question_data.get("question"),
+                    level=level_title,
+                    options=question_data.get("options"),
+                    answer=question_data.get("answer")
+                )
+                db.add(new_question)
+        
+        db.commit()
+        
+        # 3. Return the full quiz data to the frontend
+        return quiz_data
+
+    except ValueError as ve:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ve))
+    except Exception as e:
+        db.rollback()
+        traceback.print_exc() # For debugging on the server
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while creating the quiz: {e}")
 
 if __name__ == "__main__":
     import uvicorn
