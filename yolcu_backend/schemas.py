@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 # ---------- User Schemas ----------
 class UserCreate(BaseModel):
@@ -49,7 +51,7 @@ class RoadmapOut(BaseModel):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class CVBase(BaseModel):
@@ -79,9 +81,30 @@ class CVOut(CVBase):
         from_attributes = True
 
 # ---------- Project Suggestion Schemas ----------
-class ProjectSuggestion(BaseModel):
+class ProjectIdea(BaseModel):
+    id: int
     title: str
     description: str
 
+class ProjectLevel(BaseModel):
+    level_name: str
+    projects: List[ProjectIdea]
+
 class ProjectSuggestionResponse(BaseModel):
-    suggestions: List[ProjectSuggestion]
+    project_levels: List[ProjectLevel]
+
+
+# ---------- Project Evaluation Schemas ----------
+class ProjectBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+class ProjectCreate(ProjectBase):
+    pass
+
+class ProjectOut(ProjectBase):
+    id: int
+    user_id: int
+
+    class Config:
+        from_attributes = True

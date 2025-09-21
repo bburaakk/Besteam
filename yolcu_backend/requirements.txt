@@ -18,4 +18,5 @@ SQLAlchemy
 psycopg2-binary
 pydantic
 pydantic-settings
-
+chardet
+tools

@@ -2,6 +2,8 @@ import json
 import logging
 from sqlalchemy.orm import Session
 from yolcu_backend.models import Roadmap
+from sqlalchemy.orm import Session
+from .. import models
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,3 +65,9 @@ def get_centralnode_titles(db: Session, user_id: int) -> list[str]:
     except Exception as e:
         logger.error(f"An unexpected error occurred while fetching roadmap titles for user_id {user_id}: {e}", exc_info=True)
         return []
+
+def get_projects_by_user(db: Session, user_id: int) -> list[models.Project]:
+    """
+    Belirli bir kullanıcı ID'sine ait tüm projeleri veritabanından getirir.
+    """
+    return db.query(models.Project).filter(models.Project.user_id == user_id).all()

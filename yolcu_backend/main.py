@@ -1,14 +1,22 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Path, Body
+from tkinter.tix import Form
+from typing import Annotated
+from .models import Project
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Path, Body, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import tempfile
 import os
 import json
+import traceback
+from starlette import status
 
+
+from yolcu_backend.generators.project_evaluator import ProjectEvaluator
 from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.summary_creator import SummaryCreator
-from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, ProjectSuggestionResponse, LoginSchema, TokenUserResponse
+from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, LoginSchema, TokenUserResponse , ProjectOut, ProjectSuggestionResponse, ProjectLevel, ProjectIdea
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from yolcu_backend.settings import settings
 from yolcu_backend.services.ai_service import GeminiService
@@ -18,6 +26,7 @@ from yolcu_backend.generators.project_suggestion_generator import ProjectSuggest
 from yolcu_backend.services import db_service
 from yolcu_backend.models import User, Roadmap, CV
 from yolcu_backend.database import engine, Base
+
 
 
 # DB tablolarını oluştur
@@ -41,6 +50,7 @@ cv_analyzer = CVAnalyzer(ai_service=gemini_service)
 summary_creator = SummaryCreator(ai_service=gemini_service)
 chat_service = RoadmapChatService(ai_service=gemini_service)
 project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
+project_evaluator = ProjectEvaluator(ai_service=gemini_service)
 
 # ---------- Signup ----------
 @app.post("/signup", response_model=TokenUserResponse)
@@ -264,54 +274,114 @@ async def analyze_cv(
             os.unlink(temp_path)
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
 
+
 # ---------- Project Suggestions ----------
 @app.get("/project-suggestions", response_model=ProjectSuggestionResponse)
 def get_project_suggestions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        # 1. Fetch titles from the user's latest roadmap
         titles = db_service.get_centralnode_titles(db, user_id=current_user.id)
         if not titles:
             raise HTTPException(status_code=404, detail="No roadmap titles found for the current user. Please create a roadmap first.")
 
-        print(f"Found titles for user {current_user.id}: {titles}")
-
-        # 2. Generate suggestions as a JSON string
         suggestions_json_str = project_suggestion_generator.generate_suggestions(titles)
+        suggestions_data = json.loads(suggestions_json_str)
 
-        # 3. Parse the JSON string into a Python list of dictionaries
-        try:
-            suggestions_data = json.loads(suggestions_json_str)
-            print(f"Successfully parsed JSON: {suggestions_data}")
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON from AI service: {e}")
-            print(f"Raw response was: {repr(suggestions_json_str)}")
-            raise HTTPException(status_code=500, detail="Failed to parse project suggestions from AI service.")
-
-        # 4. Validate and format the suggestions - title ve description ayrı ayrı
-        formatted_suggestions = []
-        for item in suggestions_data:
-            if isinstance(item, dict) and 'title' in item and 'description' in item:
-                formatted_suggestions.append({
-                    "title": item['title'],
-                    "description": item['description']
-                })
-            else:
-                print(f"Warning: Invalid suggestion format: {item}")
-
-        if not formatted_suggestions:
-            print("Warning: No valid suggestions found in AI response")
+        if not suggestions_data or "project_levels" not in suggestions_data:
             raise HTTPException(status_code=500, detail="No valid project suggestions could be generated.")
 
-        # 5. Return the structured suggestions
-        return {"suggestions": formatted_suggestions}
+        # Create a new structure to hold the response with IDs
+        response_levels = []
+        for level in suggestions_data.get("project_levels", []):
+            created_projects = []
+            for project_idea in level.get("projects", []):
+                if "title" in project_idea and "description" in project_idea:
+                    new_project = Project(
+                        user_id=current_user.id,
+                        title=project_idea["title"],
+                        description=project_idea["description"]
+                    )
+                    db.add(new_project)
+                    db.flush() # Flush to get the ID before commit
+                    db.refresh(new_project)
+                    created_projects.append(ProjectIdea(
+                        id=new_project.id,
+                        title=new_project.title,
+                        description=new_project.description
+                    ))
+            response_levels.append(ProjectLevel(level_name=level["level_name"], projects=created_projects))
 
-    except HTTPException as e:
-        raise e
+        db.commit()
+
+        return ProjectSuggestionResponse(project_levels=response_levels)
+
     except Exception as e:
-        print(f"Unexpected error in get_project_suggestions: {e}")
-        import traceback
+        db.rollback()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
+
+# --- Project Evaluate ---
+@app.post("/api/projects/{project_id}/evaluate", response_model=dict, tags=["Projects"])
+async def evaluate_specific_project(
+        project_id: int,
+        file: UploadFile = File(..., description="The project file to be evaluated for the specified project."),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    Evaluates an uploaded file against a specific project suggestion identified by project_id.
+    """
+    project_suggestion = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project_suggestion:
+        raise HTTPException(status_code=404, detail="Project suggestion not found or you don't have access.")
+
+    temp_path = None
+    try:
+        content = await file.read()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+            temp_file.write(content)
+            temp_path = temp_file.name
+
+        project_text = project_evaluator.read_project_file(temp_path, file.filename)
+
+        if not project_text or len(project_text) < 50:
+            raise HTTPException(status_code=400, detail="The content of the file is too short to evaluate.")
+
+        suggestion_data = ProjectOut.from_orm(project_suggestion).dict()
+
+        evaluation_json_str = project_evaluator.evaluate_project(
+            project_code=project_text,
+            original_suggestion=suggestion_data
+        )
+
+        evaluation_data = json.loads(evaluation_json_str)
+        
+        # Add the project_id to the final response
+        evaluation_data["project_id"] = project_id
+        
+        return evaluation_data
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="An internal error occurred during project evaluation.")
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+@app.get("/api/projects", response_model=list[ProjectOut], tags=["Projects"])
+def get_user_projects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieves all projects for the currently logged-in user.
+    """
+    projects = db_service.get_projects_by_user(db=db, user_id=current_user.id)
+    return projects
+
 
 if __name__ == "__main__":
     import uvicorn
