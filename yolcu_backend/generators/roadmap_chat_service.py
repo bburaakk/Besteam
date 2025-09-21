@@ -55,4 +55,13 @@ class RoadmapChatService:
             topic=topic,
             roadmap_content=roadmap_content
         )
-        return self.ai_service.generate_content(prompt)
+        raw_response = self.ai_service.generate_content(prompt)
+
+        # Gemini'den gelen yanıtı formatla
+        formatted_response = (
+            raw_response
+            .replace("**", "")  # ** işaretlerini kaldır
+            .replace("\\n", "\n")  # \n stringini gerçek satır sonuna dönüştür
+        )
+
+        return formatted_response
