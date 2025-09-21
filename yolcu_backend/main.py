@@ -315,6 +315,46 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
 
+#----------------Roadmap Chat-------------------------
+@app.post("/api/roadmaps/{roadmap_id}/chat")
+def roadmap_chat(
+    roadmap_id: int,
+    question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Kullanıcının roadmap'ini getir
+    roadmap = db.query(Roadmap).filter(
+        Roadmap.id == roadmap_id,
+        Roadmap.user_id == current_user.id
+    ).first()
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+
+    # Roadmap konularını çıkar
+    topics = chat_service.extract_topics(roadmap.content)
+
+    # Soruyu roadmap konularıyla eşleştir
+    matched_topic = chat_service.match_question_to_topic(question, topics)
+
+    # Eğer konu bulunamazsa kullanıcıyı uyar
+    if not matched_topic:
+        return {
+            "roadmap_id": roadmap.id,
+            "topic": None,
+            "question": question,
+            "answer": "Lütfen sadece roadmap konularına dair bir soru sorun."
+        }
+
+    # AI cevabını üret
+    answer = chat_service.generate_answer(question, matched_topic, roadmap.content)
+
+    return {
+        "roadmap_id": roadmap.id,
+        "topic": matched_topic,
+        "question": question,
+        "answer": answer
+    }
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
