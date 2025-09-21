@@ -5,13 +5,13 @@ import { useAuth } from '../../contexts/AuthContext';
 interface MainLayoutProps {
   children: React.ReactNode;
   title: string;
-  onSearch?: (query: string) => void;
+  showSidebar?: boolean;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({
   children,
   title,
-  onSearch,
+  showSidebar = true,
 }) => {
   const { isAuthenticated } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -19,27 +19,29 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
 
+  // Sidebar sadece authenticated kullanıcılar için ve showSidebar true ise gösterilir
+  const shouldShowSidebar = isAuthenticated && showSidebar;
+
   return (
     <div className="min-h-screen flex flex-col bg-[radial-gradient(1200px_600px_at_20%_-10%,rgba(59,130,246,0.15),transparent),radial-gradient(1200px_600px_at_90%_10%,rgba(16,185,129,0.12),transparent)]">
       {/* Main content wrapper */}
       <div className="flex-1 flex">
-        {/* Sidebar for authenticated users */}
-        {isAuthenticated && (
+        {/* Sidebar for authenticated users (if enabled) */}
+        {shouldShowSidebar && (
           <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
         )}
         
         {/* Main content area */}
         <div className="flex-1 flex flex-col min-h-screen">
-          {/* Header only for non-authenticated users */}
-          {!isAuthenticated && (
+          {/* Header for non-authenticated users or when sidebar is disabled */}
+          {(!isAuthenticated || !showSidebar) && (
             <Header 
-              title={title} 
-              onSearch={onSearch}
+              title={title}
             />
           )}
           
-          {/* Mobile menu button for authenticated users */}
-          {isAuthenticated && !sidebarOpen && (
+          {/* Mobile menu button for authenticated users (if sidebar is enabled) */}
+          {shouldShowSidebar && !sidebarOpen && (
             <div className="lg:hidden fixed top-4 left-4 z-50">
               <button
                 onClick={toggleSidebar}
@@ -54,7 +56,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </div>
           )}
           
-          <main className={`flex-1 px-2 sm:px-3 lg:px-4 w-full ${isAuthenticated ? 'py-8' : 'py-8'}`}>
+          <main className={`flex-1 px-2 sm:px-3 lg:px-4 w-full ${isAuthenticated && showSidebar ? 'py-8' : 'py-8'}`}>
             {children}
           </main>
         </div>

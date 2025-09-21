@@ -45,11 +45,11 @@ const features: Feature[] = [
     details: ['Haftalık hackathon', 'Başarı rozetleri', 'Leaderboard']
   },
   {
-    title: 'İş Eşleştirme',
-    desc: 'Profiline uygun iş önerileri',
-    icon: '🎪',
-    color: 'from-indigo-400 to-indigo-600',
-    details: ['Akıllı eşleştirme', 'Şirket önerileri', 'Mülakat desteği']
+    title: 'Bilgi Quizleri',
+    desc: 'Eğlenceli öğrenme deneyimi',
+    icon: '📝',
+    color: 'from-indigo-400 to-indigo-600', 
+    details: ['Konulara özel testler', 'Anlık geri bildirim', 'İlerleme takibi']
   }
 ];
 

@@ -41,26 +41,10 @@ const CTASection: React.FC = () => {
                 </span>
               </h2>
               
-              <p className="text-lg sm:text-xl lg:text-2xl text-white/90 max-w-3xl mx-auto leading-relaxed font-medium">
-                10,000+ kullanıcı Yolcu ile hayallerindeki işe kavuştu. 
-                <span className="font-bold text-yellow-200"> Sıra sende!</span>
-              </p>
+              
             </div>
             
-            {/* Stats Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-2xl mx-auto py-6 sm:py-8">
-              {[
-                { number: '85%', label: 'Ortalama ATS Artışı', icon: '📈' },
-                { number: '2 Ay', label: 'Ortalama İş Bulma Süresi', icon: '⚡' },
-                { number: '10K+', label: 'Başarılı Mezun', icon: '🎯' }
-              ].map((stat, i) => (
-                <div key={i} className="text-center bg-white/10 backdrop-blur rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/20">
-                  <div className="text-xl sm:text-2xl mb-2">{stat.icon}</div>
-                  <div className="text-xl sm:text-2xl font-black text-white mb-1">{stat.number}</div>
-                  <div className="text-xs sm:text-sm text-white/80 font-medium">{stat.label}</div>
-                </div>
-              ))}
-            </div>
+            
             
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-2 sm:pt-4">
@@ -77,14 +61,7 @@ const CTASection: React.FC = () => {
                 <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-yellow-200 to-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </button>
               
-              <button className="group px-8 sm:px-10 py-4 sm:py-5 rounded-xl sm:rounded-2xl bg-white/10 backdrop-blur border-2 border-white/30 text-white font-bold text-base sm:text-lg hover:bg-white/20 hover:border-white/50 transition-all duration-300 w-full sm:w-auto sm:min-w-[200px]">
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Demo İzle
-                </span>
-              </button>
+              
             </div>
             
            
