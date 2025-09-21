@@ -6,4 +6,5 @@ Kullanıcı roadmap konularından birine dair soru soruyor.
 
 Lütfen bu konu hakkında açık, anlaşılır ve öğretici bir cevap üret. 
 Gerçek hayattan örneklerle sorulan soruya cevap ver.
+Geri bildirimi Türkçe yaz.
 """

@@ -1,6 +1,9 @@
+from typing import Annotated
+
 from fastapi import FastAPI, UploadFile, File, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import tempfile
 import os
@@ -74,26 +77,21 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     return {"user":db_user,"access_token": access_token, "token_type": "bearer"}
 
 # ---------- Login ----------
-@app.post("/login", response_model=TokenUserResponse)
-def login(login_data: LoginSchema, db: Session = Depends(get_db)):
+@app.post("/login")
+def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
+        (User.email == form_data.username) | (User.username == form_data.username)
     ).first()
 
-    if not user or not verify_password(login_data.password, user.password_hash):
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email/username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
-
-    return {
-        "user": user,
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    return {"access_token": access_token, "token_type": "bearer"}
 
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut)

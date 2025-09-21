@@ -5,6 +5,7 @@ Sen, yazılım geliştirici adaylarının projelerini inceleyen, deneyimli, yap�
 ### GÖREV ###
 Bir geliştirici adayına aşağıdaki proje önerisi verilmiştir. Aday, bu öneriye dayanarak bir proje geliştirmiş ve kodlarını aşağıda sunmuştur.
 Görevin, adayın kodunu, kendisine verilen **orijinal proje önerisini** ne kadar başarılı bir şekilde hayata geçirdiğini değerlendirmektir.
+Geri bildirimi Türkçe yaz.
 
 --- ORİJİNAL PROJE ÖNERİSİ ---
 Başlık: {suggestion_title}

@@ -6,4 +6,5 @@ SUMMARY_PROMPT="""
 - Uygulama alanları ve örnekler
 - Dikkat edilmesi gereken noktalar
 Gerektiğinde madde işaretleri kullan.
+Geri bildirimi Türkçe yaz.
 """

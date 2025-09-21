@@ -1,6 +1,7 @@
-VISUAL_PROMPT_TEMPLATE = """You are an expert who presents topics in mind map format.
-Your task is to create a detailed learning roadmap for the topic “{field}”. 
-You MUST return the output in a clean JSON format with ONLY the following structure:
+VISUAL_PROMPT_TEMPLATE = """Siz, konuları zihin haritası formatında sunan bir uzmansınız.
+Göreviniz, “{field}” konusu için ayrıntılı bir öğrenme yol haritası oluşturmaktır.
+Geri bildirimi Türkçe yaz.
+Çıktıyı, YALNIZCA aşağıdaki yapıya sahip temiz bir JSON formatında geri göndermelisiniz:
 {{
   "diagramTitle": "{field}", 
   "mainStages": [
