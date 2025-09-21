@@ -3,6 +3,8 @@ import re
 from yolcu_backend.services.ai_service import GeminiService
 from yolcu_backend.prompts.suggestion_prompt import SUGGESTION_PROMPT
 
+
+
 class ProjectSuggestionGenerator:
     def __init__(self, ai_service: GeminiService):
         self.ai_service = ai_service

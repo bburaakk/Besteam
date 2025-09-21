@@ -8,3 +8,5 @@ class GeminiService:
     def generate_content(self, prompt: str) -> str:
         response = self.model.generate_content(prompt)
         return response.text
+    def generate_answer(self, prompt: str) -> str:
+        return self.generate_content(prompt)

@@ -30,8 +30,8 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
         const rect = containerRef.current.getBoundingClientRect();
         const isMobile = window.innerWidth < 768;
         setDimensions({ 
-          width: Math.max(isMobile ? 1000 : 1600, rect.width || window.innerWidth * 0.9), 
-          height: Math.max(isMobile ? 1200 : 2000, window.innerHeight * (isMobile ? 1.2 : 1.5)) 
+          width: Math.max(isMobile ? 1200 : 1800, rect.width || window.innerWidth * 0.9), 
+          height: Math.max(isMobile ? 1500 : 2500, window.innerHeight * (isMobile ? 1.5 : 2)) 
         });
       }
     };
@@ -169,23 +169,38 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     });
   }, [transform, dimensions]);
 
-  // Helper function to wrap text
+  // Helper function to wrap text with better character width estimation
   const wrapText = (text: string, maxWidth: number) => {
     const words = text.split(' ');
     const lines: string[] = [];
     let currentLine = '';
+    
+    // Better character width estimation (average character width in pixels)
+    const avgCharWidth = 7; // Slightly reduced for better fitting
+    const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth);
 
     words.forEach(word => {
       const testLine = currentLine ? `${currentLine} ${word}` : word;
-      // Approximate character width (adjust as needed)
-      if (testLine.length * 8 <= maxWidth) {
+      
+      if (testLine.length <= maxCharsPerLine) {
         currentLine = testLine;
       } else {
         if (currentLine) {
           lines.push(currentLine);
           currentLine = word;
         } else {
-          lines.push(word);
+          // Word is too long, try to break it intelligently
+          if (word.length > maxCharsPerLine) {
+            // Break long words at reasonable points
+            const breakPoints = Math.ceil(word.length / maxCharsPerLine);
+            for (let i = 0; i < breakPoints; i++) {
+              const start = i * maxCharsPerLine;
+              const end = Math.min(start + maxCharsPerLine, word.length);
+              lines.push(word.substring(start, end));
+            }
+          } else {
+            lines.push(word);
+          }
         }
       }
     });
@@ -194,7 +209,8 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
       lines.push(currentLine);
     }
 
-    return lines;
+    // Limit to maximum 3 lines to prevent overflow
+    return lines.slice(0, 3);
   };
 
   // Transform roadmap data to SVG format
@@ -214,7 +230,7 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     
     const currentY = 150;
     const centerX = 800; // Merkezi daha sağa kaydırdık subtopicler için yer açmak için
-    const stageSpacing = 300; // Çok daha fazla dikey boşluk subtopicler için
+    const stageSpacing = 400; // Ana topic'ler arası daha fazla boşluk
 
     // Stage colors
     const stageColors = [
@@ -312,19 +328,19 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     const renderSide = (subtopics: Array<{ id: string; name: string; }>, isLeft: boolean) => {
       const isMobile = dimensions.width < 1200;
       const baseX = isLeft ? 
-        step.position.x - (isMobile ? 220 : 270) : 
-        step.position.x + (isMobile ? 170 : 220);
-      const subtopicSpacing = isMobile ? 40 : 50; // Mobilde daha az boşluk
+        step.position.x - (isMobile ? 280 : 350) : 
+        step.position.x + (isMobile ? 250 : 300);
+      const subtopicSpacing = isMobile ? 55 : 65; // Daha fazla boşluk
       const baseY = step.position.y - (subtopics.length * subtopicSpacing / 2);
 
       return subtopics.map((subtopic: { id: string; name: string; }, index: number) => {
         return (
         <g key={`subtopic-${stepIndex}-${isLeft ? 'left' : 'right'}-${index}`}>
           <line
-            x1={isLeft ? step.position.x : step.position.x + 200}
-            y1={step.position.y + 25}
-            x2={isLeft ? baseX + 250 : baseX}
-            y2={baseY + (index * subtopicSpacing) + 20}
+            x1={isLeft ? step.position.x : step.position.x + 240}
+            y1={step.position.y + 30}
+            x2={isLeft ? baseX + (isMobile ? 220 : 280) : baseX}
+            y2={baseY + (index * subtopicSpacing) + 22}
             stroke={step.color}
             strokeWidth="2"
             strokeDasharray="5,5"
@@ -332,9 +348,9 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
           <rect
             x={baseX}
             y={baseY + (index * subtopicSpacing)}
-            width={isMobile ? "200" : "250"}
-            height="35"
-            rx="17"
+            width={isMobile ? "220" : "280"}
+            height="45"
+            rx="20"
             fill="white"
             stroke={step.color}
             strokeWidth="2"
@@ -342,11 +358,11 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
             onClick={(e) => fetchSummary(subtopic.name, e, subtopic.id)}
           />
           {(() => {
-            const wrappedLines = wrapText(subtopic.name, isMobile ? 180 : 230);
-            const lineHeight = 14;
+            const wrappedLines = wrapText(subtopic.name, isMobile ? 210 : 270);
+            const lineHeight = 16;
             const totalHeight = wrappedLines.length * lineHeight;
-            const startY = baseY + (index * subtopicSpacing) + 17 - (totalHeight / 2) + (lineHeight / 2);
-            const centerX = baseX + (isMobile ? 100 : 125);
+            const startY = baseY + (index * subtopicSpacing) + 22 - (totalHeight / 2) + (lineHeight / 2);
+            const centerX = baseX + (isMobile ? 110 : 140);
             
             return wrappedLines.map((line, lineIndex) => (
         <text
@@ -355,8 +371,8 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
                 y={startY + (lineIndex * lineHeight)}
           textAnchor="middle"
           dominantBaseline="middle"
-                className="text-sm fill-gray-700 font-medium cursor-pointer hover:fill-gray-900 transition-colors"
-                style={{ fontSize: isMobile ? '11px' : '12px' }}
+                className="text-base fill-gray-700 font-medium cursor-pointer hover:fill-gray-900 transition-colors"
+                style={{ fontSize: isMobile ? '12px' : '14px' }}
                 onClick={(e) => fetchSummary(subtopic.name, e, subtopic.id)}
         >
                 {line}
@@ -462,9 +478,9 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
                 <rect
                   x={step.position.x}
                   y={step.position.y}
-                  width="200"
-                  height="50"
-                  rx="25"
+                  width="240"
+                  height="60"
+                  rx="30"
                   fill={step.color}
                   stroke={isSelected ? "#1F2937" : "white"}
                   strokeWidth={isSelected ? "3" : "2"}
@@ -477,20 +493,20 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
                 
                 {/* Step Title */}
                 {(() => {
-                  const wrappedLines = wrapText(step.title, 180);
-                  const lineHeight = 16;
+                  const wrappedLines = wrapText(step.title, 230);
+                  const lineHeight = 18;
                   const totalHeight = wrappedLines.length * lineHeight;
-                  const startY = step.position.y + 25 - (totalHeight / 2) + (lineHeight / 2);
+                  const startY = step.position.y + 30 - (totalHeight / 2) + (lineHeight / 2);
                   
                   return wrappedLines.map((line, lineIndex) => (
                 <text
                       key={`title-line-${lineIndex}`}
-                  x={step.position.x + 100}
+                  x={step.position.x + 120}
                       y={startY + (lineIndex * lineHeight)}
                   textAnchor="middle"
                   dominantBaseline="middle"
                       className="font-semibold cursor-pointer fill-gray-800"
-                      style={{ fontSize: '13px' }}
+                      style={{ fontSize: '15px' }}
                   onClick={() => {
                     setSelectedNode(isSelected ? null : step.id);
                   }}

@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import RoadmapPage from './pages/RoadmapPage';
 import CVAnalysisPage from './pages/CVAnalysisPage';
 import DashboardPage from './pages/DashboardPage';
+import ProjectSuggestionsPage from './pages/ProjectSuggestionsPage';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/roadmap" element={<RoadmapPage />} />
           <Route path="/cv-analysis" element={<CVAnalysisPage />} />
+          <Route path="/project-suggestions" element={<ProjectSuggestionsPage />} />
         </Routes>
       </Router>
     </AuthProvider>

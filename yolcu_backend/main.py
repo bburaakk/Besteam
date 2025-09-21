@@ -1,10 +1,6 @@
-from tkinter.tix import Form
-from typing import Annotated
-from .models import Project
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Path, Body, Form
+from fastapi import FastAPI, UploadFile, File, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import tempfile
 import os
@@ -16,6 +12,7 @@ from starlette import status
 from yolcu_backend.generators.project_evaluator import ProjectEvaluator
 from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.summary_creator import SummaryCreator
+from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
 from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, LoginSchema, TokenUserResponse , ProjectOut, ProjectSuggestionResponse, ProjectLevel, ProjectIdea
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from yolcu_backend.settings import settings
@@ -24,9 +21,8 @@ from yolcu_backend.generators.roadmap_generator import RoadmapGenerator
 from yolcu_backend.generators.cv_analyzer import CVAnalyzer
 from yolcu_backend.generators.project_suggestion_generator import ProjectSuggestionGenerator
 from yolcu_backend.services import db_service
-from yolcu_backend.models import User, Roadmap, CV
+from yolcu_backend.models import User, Roadmap, CV, Project
 from yolcu_backend.database import engine, Base
-
 
 
 # DB tablolarını oluştur
@@ -274,7 +270,6 @@ async def analyze_cv(
             os.unlink(temp_path)
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
 
-
 # ---------- Project Suggestions ----------
 @app.get("/project-suggestions", response_model=ProjectSuggestionResponse)
 def get_project_suggestions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -358,10 +353,10 @@ async def evaluate_specific_project(
         )
 
         evaluation_data = json.loads(evaluation_json_str)
-        
+
         # Add the project_id to the final response
         evaluation_data["project_id"] = project_id
-        
+
         return evaluation_data
 
     except Exception as e:
@@ -381,6 +376,24 @@ def get_user_projects(
     """
     projects = db_service.get_projects_by_user(db=db, user_id=current_user.id)
     return projects
+
+
+# ---------- Motivational ----------
+@app.get("/motivational-message")
+async def get_motivational_message():
+    try:
+        response = gemini_service.generate_content(MOTIVATIONAL_PROMPT)
+
+        return {"message": response}
+
+    except Exception as e:
+        print(f"Motivasyon Mesajı Hatası: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Harika projeler seni bekliyor, haydi başlayalım!"
+        )
+
+
 
 
 if __name__ == "__main__":
