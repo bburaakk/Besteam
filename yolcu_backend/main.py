@@ -1,52 +1,126 @@
-from fastapi import FastAPI, UploadFile, File, Path, Body
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Depends, HTTPException
-from sqlalchemy.orm import Session
-import tempfile
+
 import os
 import json
-import traceback
-from yolcu_backend.generators.project_evaluator import ProjectEvaluator
-from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
-from yolcu_backend.generators.summary_creator import SummaryCreator
-from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
-from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, LoginSchema, TokenUserResponse , ProjectOut, ProjectSuggestionResponse, ProjectLevel, ProjectIdea
-from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
+import tempfile
+from typing import List, Annotated
+
+# FastAPI and related imports
+from fastapi import FastAPI, UploadFile, File, Path, Body, Depends, HTTPException, status,WebSocket, WebSocketDisconnect, Query
+
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+
+# --- Imports from yolcu_backend ---
 from yolcu_backend.settings import settings
+from yolcu_backend.database import engine as yolcu_engine, Base as YolcuBase
+from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
+
+from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut,ProjectSuggestionResponse, LoginSchema, TokenUserResponse
+
+from yolcu_backend.models import User, Roadmap, CV, Project
 from yolcu_backend.services.ai_service import GeminiService
 from yolcu_backend.generators.roadmap_generator import RoadmapGenerator
 from yolcu_backend.generators.cv_analyzer import CVAnalyzer
+from yolcu_backend.generators.summary_creator import SummaryCreator
+from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.project_suggestion_generator import ProjectSuggestionGenerator
+from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
 from yolcu_backend.services import db_service
-from yolcu_backend.models import User, Roadmap, CV, Project
-from yolcu_backend.database import engine, Base
 
+# --- Imports from hackathon project ---
+from yolcu_backend.database import engine as hackathon_engine, SessionLocal
+from yolcu_backend.websocket_manager import manager
+from yolcu_backend.sample_data import HACKATHONS
+from yolcu_backend import models, schemas, crud
+# --- Database Table Creation ---
+# Create tables for both applications. Ensure engines point to the same database.
+# Note: This assumes both YolcuBase and models.Base can bind to the same engine.
+YolcuBase.metadata.create_all(bind=yolcu_engine)
+models.Base.metadata.create_all(bind=hackathon_engine)
 
-# DB tablolarını oluştur
-Base.metadata.create_all(bind=engine)
+app = FastAPI(
+    title="Unified Platform API",
+    description="Service for Roadmaps, CVs, Hackathons, Teams, and Chat."
+)
 
-app = FastAPI()
+# --- CORS Middleware ---
+# Using the more specific CORS settings from the hackathon project for better security.
+origins = [
+    "http://localhost:5173",  # React (Vite) default
+    "http://localhost:3000",  # Create React App default
+]
 
-# ---------- CORS ----------
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------- Services ----------
+# --- Service Initialization (from yolcu_backend) ---
 gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
 roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
 cv_analyzer = CVAnalyzer(ai_service=gemini_service)
 summary_creator = SummaryCreator(ai_service=gemini_service)
 chat_service = RoadmapChatService(ai_service=gemini_service)
 project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
-project_evaluator = ProjectEvaluator(ai_service=gemini_service)
+
+
+# --- Startup Event (from hackathon project) ---
+@app.on_event("startup")
+def on_startup():
+    db = SessionLocal()
+    # Veritabanında ilk hackathon'un olup olmadığını kontrol edelim.
+    # Varsa, örnek veriler zaten eklenmiş demektir.
+    if not crud.get_hackathons(db): # Changed from get_hackathon to get_hackathons and check if list is empty
+        print("Database is empty, adding sample data...")
+
+        # --- Örnek Kullanıcılar (İsteğe bağlı, kalabilir) ---
+        user_ali_data = schemas.UserCreate(
+            first_name="Ali", last_name="Veli", username="ali",
+            email="ali@example.com", password="password123"
+        )
+        user_veli_data = schemas.UserCreate(
+            first_name="Veli", last_name="Yılmaz", username="veli",
+            email="veli@example.com", password="password123"
+        )
+        user_ali = crud.create_user(db, user=user_ali_data)
+        user_veli = crud.create_user(db, user=user_veli_data)
+
+        # --- Örnek Hackathon'ları Döngüyle Ekleme ---
+        print(f"Adding {len(HACKATHONS)} hackathons from sample_data.py...")
+        created_hackathons = []
+        for hackathon_data in HACKATHONS:
+            hackathon_schema = schemas.HackathonCreate(
+                title=hackathon_data["title"],
+                description=hackathon_data["description"]
+            )
+            created_hackathon = crud.create_hackathon(db, hackathon=hackathon_schema)
+            created_hackathons.append(created_hackathon)
+            print(f"  - Created hackathon: {created_hackathon.title}")
+
+        # --- İlk Hackathon'a Örnek Bir Takım Ekleme (İsteğe bağlı) ---
+        if created_hackathons:
+            first_hackathon = created_hackathons[0]
+            team = crud.create_team_for_hackathon(db, team=schemas.TeamCreate(name="Tekno Girişimciler"),
+                                                  hackathon_id=first_hackathon.id, user_id=user_ali.id)
+            crud.add_user_to_team(db, team_id=team.id, user_id=user_veli.id)
+            print(f"Sample team created for '{first_hackathon.title}'.")
+
+    else:
+        print("Database already contains data, skipping sample data creation.")
+
+    db.close()
+
+
+# =================================================================
+# ========== YOLCU BACKEND ENDPOINTS ==============================
+# =================================================================
 
 # ---------- Signup ----------
-@app.post("/signup", response_model=TokenUserResponse)
+@app.post("/signup", response_model=TokenUserResponse, tags=["Authentication"])
 def signup(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(
         (User.email == user.email) | (User.username == user.username)
@@ -66,9 +140,9 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
 
-    # Kayıt sonrası otomatik token döndürmek istersek:
     access_token = create_access_token(data={"sub": str(db_user.id)})
-    return {"user":db_user,"access_token": access_token, "token_type": "bearer"}
+    return {"user": db_user, "access_token": access_token, "token_type": "bearer"}
+
 
 # ---------- Login ----------
 @app.post("/login", response_model=TokenUserResponse)
@@ -91,53 +165,37 @@ def login(login_data: LoginSchema, db: Session = Depends(get_db)):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
 # ---------- Get User by ID ----------
-@app.get("/users/{user_id}", response_model=UserOut)
-def get_user_by_id(
-    user_id: int = Path(..., description="ID of the user to retrieve"),
-    db: Session = Depends(get_db)
-):
+@app.get("/users/{user_id}", response_model=UserOut, tags=["Users"])
+def get_user_by_id(user_id: int = Path(..., description="ID of the user to retrieve"), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-# ---------- Roadmap Generator ----------
-@app.post("/api/roadmaps/generate", response_model=RoadmapOut)
-def generate_roadmap(
-    request: TopicRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    generator = RoadmapGenerator(ai_service=gemini_service)  # gemini_service DI yapılmalı
-    roadmap_json = generator.create_roadmap(request.field)   # dict döner
 
+# ---------- Roadmap Endpoints ----------
+@app.post("/api/roadmaps/generate", response_model=RoadmapOut, tags=["Roadmaps"])
+def generate_roadmap(request: TopicRequest, db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)):
+    roadmap_json = roadmap_generator.create_roadmap(request.field)
     roadmap = Roadmap(user_id=current_user.id, content=roadmap_json)
     db.add(roadmap)
     db.commit()
     db.refresh(roadmap)
-
     return roadmap
-from fastapi import Query
 
-@app.get("/api/roadmaps/{roadmap_id}/summaries")
-def summarize_item(
-    roadmap_id: int,
-    item_id: str = Query(..., description="Left veya right item ID"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Roadmap'i çek
-    roadmap = db.query(Roadmap).filter(
-        Roadmap.id == roadmap_id,
-        Roadmap.user_id == current_user.id
-    ).first()
+
+@app.get("/api/roadmaps/{roadmap_id}/summaries", tags=["Roadmaps"])
+def summarize_item(roadmap_id: int, item_id: str = Query(..., description="Left or right item ID"),
+                   db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    roadmap = db.query(Roadmap).filter(Roadmap.id == roadmap_id, Roadmap.user_id == current_user.id).first()
     if not roadmap:
         raise HTTPException(status_code=404, detail="Roadmap not found")
 
-    # item_title ve center_node bul
-    topic_title = None
-    center_node_title = None
+    topic_title, center_node_title = None, None
     for stage in roadmap.content.get("mainStages", []):
         for node in stage.get("subNodes", []):
             for side in ["leftItems", "rightItems"]:
@@ -146,144 +204,91 @@ def summarize_item(
                         topic_title = item.get("name")
                         center_node_title = node.get("centralNodeTitle")
                         break
-                if topic_title:
-                    break
-            if topic_title:
-                break
-        if topic_title:
-            break
+                if topic_title: break
+            if topic_title: break
+        if topic_title: break
 
     if not topic_title:
         raise HTTPException(status_code=404, detail="Item not found in roadmap.")
 
-    # SummaryCreator ile özet üret
-    summary = summary_creator.generate_summary(
-        roadmap_json=roadmap.content,
-        item_id=item_id
-    )
+    summary = summary_creator.generate_summary(roadmap_json=roadmap.content, item_id=item_id)
+    return {"roadmap_id": roadmap.id, "center_node": center_node_title, "item_id": item_id, "topic": topic_title,
+            "summary": summary}
 
-    return {
-        "roadmap_id": roadmap.id,
-        "center_node": center_node_title,
-        "item_id": item_id,
-        "topic": topic_title,
-        "summary": summary
-    }
 
-@app.post("/api/roadmaps/{roadmap_id}/chat")
-def roadmap_chat(
-    roadmap_id: int,
-    question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Kullanıcının roadmap'ini getir
-    roadmap = db.query(Roadmap).filter(
-        Roadmap.id == roadmap_id,
-        Roadmap.user_id == current_user.id
-    ).first()
+@app.post("/api/roadmaps/{roadmap_id}/chat", tags=["Roadmaps"])
+def roadmap_chat(roadmap_id: int, question: str = Body(..., embed=True), db: Session = Depends(get_db),
+                 current_user: User = Depends(get_current_user)):
+    roadmap = db.query(Roadmap).filter(Roadmap.id == roadmap_id, Roadmap.user_id == current_user.id).first()
     if not roadmap:
         raise HTTPException(status_code=404, detail="Roadmap not found")
 
-    # Konuları çıkar
     topics = chat_service.extract_topics(roadmap.content)
-
-    # Soruyu eşleştir
     matched_topic = chat_service.match_question_to_topic(question, topics)
     if not matched_topic:
-        raise HTTPException(
-            status_code=400,
-            detail="Bu soru roadmap konularıyla ilgili değil. Lütfen roadmap konularına dair soru sorun."
-        )
+        raise HTTPException(status_code=400, detail="Question is not related to the roadmap topics.")
 
-    # AI cevabı üret
     answer = chat_service.generate_answer(question, matched_topic, roadmap.content)
+    return {"roadmap_id": roadmap.id, "topic": matched_topic, "question": question, "answer": answer}
 
-    return {
-        "roadmap_id": roadmap.id,
-        "topic": matched_topic,
-        "question": question,
-        "answer": answer
-    }
 
 # ---------- CV Analyze ----------
-@app.post("/api/cv/analyze", response_model=CVOut)
-async def analyze_cv(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    # --- Dosya kontrolü ---
+@app.post("/api/cv/analyze", response_model=CVOut, tags=["CV"])
+async def analyze_cv(file: UploadFile = File(...), current_user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db)):
     if not file.filename.lower().endswith(('.pdf', '.txt')):
         raise HTTPException(status_code=400, detail="Only PDF or TXT files allowed.")
 
     content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
+    if len(content) > 5 * 1024 * 1024:  # 5MB limit
         raise HTTPException(status_code=413, detail="File too large (max 5MB).")
 
+    temp_path = None
     try:
-        # --- Geçici dosya oluştur ---
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
             temp_file.write(content)
             temp_path = temp_file.name
 
-        # --- CV içeriğini oku ---
         cv_text = cv_analyzer.read_cv(temp_path)
-
-        # --- ATS analizleri ---
         keywords_result = cv_analyzer.extract_keywords(cv_text)
-        basic_score = cv_analyzer.ats_score_basic(cv_text, keywords_result["found"])
         advanced_score = cv_analyzer.ats_score_advanced(cv_text, keywords_result["found"])
-        language = cv_analyzer.detect_language(cv_text)
-        tips = cv_analyzer.get_ats_optimization_tips(advanced_score)
         feedback = cv_analyzer.generate_ai_feedback(cv_text, advanced_score)
 
-        # --- temp dosya temizliği ---
-        os.unlink(temp_path)
-
-        # --- DB'ye kaydet ---
         cv_entry = CV(
             user_id=current_user.id,
             file_name=file.filename,
             content=cv_text,
-            basic_score=basic_score["basic_score"],
-            advanced_score=advanced_score["basic_score"],
             final_score=advanced_score["final_score"],
             found_keywords=advanced_score["found_keywords"],
             missing_keywords=advanced_score["missing_keywords"],
             feedback=feedback,
-            tips=tips,
-            language=language,
+            tips=cv_analyzer.get_ats_optimization_tips(advanced_score),
+            language=cv_analyzer.detect_language(cv_text),
         )
         db.add(cv_entry)
         db.commit()
         db.refresh(cv_entry)
-
         return cv_entry
-
     except Exception as e:
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            os.unlink(temp_path)
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
 
 # ---------- Project Suggestions ----------
-@app.get("/project-suggestions", response_model=ProjectSuggestionResponse)
+@app.get("/project-suggestions", response_model=ProjectSuggestionResponse, tags=["Projects"])
 def get_project_suggestions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         titles = db_service.get_centralnode_titles(db, user_id=current_user.id)
         if not titles:
-            raise HTTPException(status_code=404, detail="No roadmap titles found for the current user. Please create a roadmap first.")
+            raise HTTPException(status_code=404, detail="No roadmap found for user. Create a roadmap first.")
 
         suggestions_json_str = project_suggestion_generator.generate_suggestions(titles)
         suggestions_data = json.loads(suggestions_json_str)
 
-        if not suggestions_data or "project_levels" not in suggestions_data:
-            raise HTTPException(status_code=500, detail="No valid project suggestions could be generated.")
-
-        # Create a new structure to hold the response with IDs
-        response_levels = []
+        # Save suggestions to the database
         for level in suggestions_data.get("project_levels", []):
-            created_projects = []
             for project_idea in level.get("projects", []):
                 if "title" in project_idea and "description" in project_idea:
                     new_project = Project(
@@ -292,106 +297,127 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
                         description=project_idea["description"]
                     )
                     db.add(new_project)
-                    db.flush() # Flush to get the ID before commit
-                    db.refresh(new_project)
-                    created_projects.append(ProjectIdea(
-                        id=new_project.id,
-                        title=new_project.title,
-                        description=new_project.description
-                    ))
-            response_levels.append(ProjectLevel(level_name=level["level_name"], projects=created_projects))
-
         db.commit()
-
-        return ProjectSuggestionResponse(project_levels=response_levels)
-
+        return suggestions_data
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to parse project suggestions from AI service.")
     except Exception as e:
-        db.rollback()
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
-
-# --- Project Evaluate ---
-@app.post("/api/projects/{project_id}/evaluate", response_model=dict, tags=["Projects"])
-async def evaluate_specific_project(
-        project_id: int,
-        file: UploadFile = File(..., description="The project file to be evaluated for the specified project."),
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
-):
-    """
-    Evaluates an uploaded file against a specific project suggestion identified by project_id.
-    """
-    project_suggestion = db.query(Project).filter(
-        Project.id == project_id,
-        Project.user_id == current_user.id
-    ).first()
-
-    if not project_suggestion:
-        raise HTTPException(status_code=404, detail="Project suggestion not found or you don't have access.")
-
-    temp_path = None
-    try:
-        content = await file.read()
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
-            temp_file.write(content)
-            temp_path = temp_file.name
-
-        project_text = project_evaluator.read_project_file(temp_path, file.filename)
-
-        if not project_text or len(project_text) < 50:
-            raise HTTPException(status_code=400, detail="The content of the file is too short to evaluate.")
-
-        suggestion_data = ProjectOut.from_orm(project_suggestion).dict()
-
-        evaluation_json_str = project_evaluator.evaluate_project(
-            project_code=project_text,
-            original_suggestion=suggestion_data
-        )
-
-        evaluation_data = json.loads(evaluation_json_str)
-
-        # Add the project_id to the final response
-        evaluation_data["project_id"] = project_id
-
-        return evaluation_data
-
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail="An internal error occurred during project evaluation.")
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            os.unlink(temp_path)
-
-@app.get("/api/projects", response_model=list[ProjectOut], tags=["Projects"])
-def get_user_projects(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Retrieves all projects for the currently logged-in user.
-    """
-    projects = db_service.get_projects_by_user(db=db, user_id=current_user.id)
-    return projects
+        raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
 
 
-# ---------- Motivational ----------
-@app.get("/motivational-message")
+# ---------- Motivational Message ----------
+@app.get("/motivational-message", tags=["Utilities"])
 async def get_motivational_message():
     try:
-        response = gemini_service.generate_content(MOTIVATIONAL_PROMPT)
-
-        return {"message": response}
-
+        raw_response = gemini_service.generate_content(MOTIVATIONAL_PROMPT)
+        formatted_response = " ".join(raw_response.replace("**", "").split())
+        return {"message": formatted_response}
     except Exception as e:
-        print(f"Motivasyon Mesajı Hatası: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Harika projeler seni bekliyor, haydi başlayalım!"
-        )
+        print(f"Motivational Message Error: {e}")
+        raise HTTPException(status_code=500, detail="Great projects are waiting for you, let's get started!")
 
 
+# =================================================================
+# ========== HACKATHON PROJECT ENDPOINTS ==========================
+# =================================================================
 
+# ---------- Get Hackathons ----------
+@app.get("/hackathons/", response_model=List[schemas.HackathonSchema], tags=["Hackathons"])
+def get_hackathons(db: Session = Depends(get_db)):
+    return crud.get_hackathons(db)
+
+
+# ---------- Create Team ----------
+@app.post("/hackathons/{hackathon_id}/teams/", response_model=schemas.TeamSchema, status_code=status.HTTP_201_CREATED,
+          tags=["Teams"])
+def create_team(hackathon_id: int, team: schemas.TeamCreate, current_user_id: int, db: Session = Depends(get_db)):
+    # Note: In a real app, current_user_id should come from a decoded JWT token (like `Depends(get_current_user)`)
+    return crud.create_team_for_hackathon(db=db, team=team, hackathon_id=hackathon_id, user_id=current_user_id)
+
+
+# ---------- Join Team ----------
+@app.post("/teams/{team_id}/join/", status_code=status.HTTP_200_OK, tags=["Teams"])
+def join_team(team_id: int, current_user_id: int, db: Session = Depends(get_db)):
+    db_team = crud.get_team(db, team_id=team_id)
+    if not db_team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    if len(db_team.members) >= 5:
+        raise HTTPException(status_code=400, detail="Team is full (max 5 members)")
+    if any(member.user_id == current_user_id for member in db_team.members):
+        raise HTTPException(status_code=400, detail="User is already in this team")
+
+    crud.add_user_to_team(db, team_id=team_id, user_id=current_user_id)
+    return {"message": f"Successfully joined team '{db_team.name}'"}
+
+
+# ---------- Get Message History ----------
+@app.get("/hackathons/{hackathon_id}/messages", response_model=List[schemas.MessageSchema], tags=["Chat"])
+def read_hackathon_messages(hackathon_id: int, db: Session = Depends(get_db)):
+    return crud.get_hackathon_messages(db, hackathon_id=hackathon_id)
+
+
+@app.get("/teams/{team_id}/messages", response_model=List[schemas.MessageSchema], tags=["Chat"])
+def read_team_messages(team_id: int, current_user_id: int, db: Session = Depends(get_db)):
+    team = crud.get_team(db, team_id=team_id)
+    if not team or not any(member.user_id == current_user_id for member in team.members):
+        raise HTTPException(status_code=403, detail="You are not authorized to view this team's messages.")
+    return crud.get_team_messages(db, team_id=team_id)
+
+
+# ---------- WebSocket Endpoint for Chat ----------
+@app.websocket("/ws/{chat_type}/{item_id}/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, chat_type: str, item_id: int, user_id: int):
+    # WebSocket dependencies are tricky, so we create a new session.
+    db = SessionLocal()
+    try:
+        user = crud.get_user(db, user_id)
+        if not user:
+            await websocket.close(code=status.WS_1008_POLICY_VIVIOLATION)
+            return
+
+        room_name = f"{chat_type}-{item_id}"
+
+        if chat_type == "team":
+            team = crud.get_team(db, item_id)
+            if not team or not any(member.user_id == user_id for member in team.members):
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Not a team member")
+                return
+
+        await manager.connect(websocket, room_name)
+        try:
+            while True:
+                data = await websocket.receive_text()
+                crud.create_chat_message(
+                    db,
+                    content=data,
+                    user_id=user_id,
+                    hackathon_id=item_id if chat_type == 'hackathon' else None,
+                    team_id=item_id if chat_type == 'team' else None
+                )
+                broadcast_message = f"[{user.username}]: {data}"
+                await manager.broadcast(broadcast_message, room_name)
+        except WebSocketDisconnect:
+            manager.disconnect(websocket, room_name)
+        except Exception as e:
+            print(f"WebSocket Error: {e}")
+            manager.disconnect(websocket, room_name)
+    finally:
+        db.close()
+
+
+# =================================================================
+# ========== APPLICATION RUNNER ===================================
+# =================================================================
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+
+    # Clean up old database file on restart for development
+    if os.path.exists("hackathon.db"):
+        os.remove("hackathon.db")
+        print("Old database file removed.")
+
+    # Note: Ensure your yolcu_backend also uses 'hackathon.db' or unify db configurations.
+
+    # Running on port 8000 with auto-reload, as specified in the hackathon project.
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

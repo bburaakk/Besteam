@@ -108,3 +108,55 @@ class ProjectOut(ProjectBase):
 
     class Config:
         from_attributes = True
+
+#-----------Hackathon----------
+
+class UserBasicInfo(BaseModel):
+    id: int
+    username: str
+    class Config:
+        from_attributes = True
+
+
+# --- Takım Şemaları ---
+class TeamMemberSchema(BaseModel):
+    user: UserBasicInfo # Temel kullanıcı şemasına referans verildi
+    class Config:
+        from_attributes = True
+
+class TeamBase(BaseModel):
+    name: str
+
+class TeamCreate(TeamBase):
+    pass
+
+class TeamSchema(TeamBase):
+    id: int
+    members: List[TeamMemberSchema] = []
+    class Config:
+        from_attributes = True
+
+# --- Hackathon Şemaları ---
+class HackathonBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+class HackathonCreate(HackathonBase):
+    pass
+
+class HackathonSchema(HackathonBase):
+    id: int
+    teams: List[TeamSchema] = []
+    class Config:
+        from_attributes = True
+
+# --- Mesaj Şemaları ---
+class MessageSchema(BaseModel):
+    id: int
+    content: str
+    created_at: datetime
+    sender: UserBasicInfo # Temel kullanıcı şemasına referans verildi
+    class Config:
+        from_attributes = True
+
+

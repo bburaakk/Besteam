@@ -1,4 +1,7 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, TIMESTAMP, func, Numeric
+from datetime import datetime, timezone
+
+
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, TIMESTAMP, func, Numeric, DateTime
 from sqlalchemy.orm import relationship
 from yolcu_backend.database import Base
 from sqlalchemy.dialects.postgresql import JSONB
@@ -14,6 +17,7 @@ class User(Base):
     last_name = Column(String(100), nullable=False)
     password_hash = Column(String(255), nullable=False)
     biography = Column(Text, nullable=True)
+    teams = relationship("TeamMember", back_populates="user")
 
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -68,3 +72,39 @@ class Project(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="projects")
+
+class Hackathon(Base):
+    __tablename__ = "hackathons"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(Text)
+    start_date = Column(DateTime, default=datetime.utcnow)
+    end_date = Column(DateTime, nullable=True)
+    teams = relationship("Team", back_populates="hackathon")
+
+class Team(Base):
+    __tablename__ = "teams"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    hackathon_id = Column(Integer, ForeignKey("hackathons.id"))
+    hackathon = relationship("Hackathon", back_populates="teams")
+    members = relationship("TeamMember", back_populates="team")
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    team_id = Column(Integer, ForeignKey("teams.id"))
+    user = relationship("User", back_populates="teams")
+    team = relationship("Team", back_populates="members")
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    hackathon_id = Column(Integer, ForeignKey("hackathons.id"), nullable=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    sender = relationship("User")
