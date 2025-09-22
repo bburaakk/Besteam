@@ -291,7 +291,7 @@ def get_user_projects(db: Session = Depends(get_db), current_user: User = Depend
 async def get_motivational_message():
     try:
         raw_response = gemini_service.generate_content(MOTIVATIONAL_PROMPT)
-        formatted_response = " ".join(raw_response.replace("**", " ").split())
+        formatted_response = " ".join(raw_response.replace("**", " ").replace("*", "").split())
         return {"message": formatted_response}
     except Exception as e:
         print(f"Motivational Message Error: {e}")
