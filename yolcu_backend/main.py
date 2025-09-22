@@ -2,11 +2,11 @@ import os
 import json
 import traceback
 import tempfile
-from typing import List, Annotated
+from typing import List
 
 from fastapi import FastAPI, UploadFile, File, Path, Body, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
+
 from sqlalchemy.orm import Session
 
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
@@ -92,21 +92,27 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     access_token = create_access_token(data={"sub": str(db_user.id)})
     return {"user": db_user, "access_token": access_token, "token_type": "bearer"}
 
-@app.post("/login")
-def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
+# ---------- Login ----------
+@app.post("/login", response_model=TokenUserResponse)
+def login(login_data: LoginSchema, db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == form_data.username) | (User.username == form_data.username)
+        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
     ).first()
 
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=401,
             detail="Incorrect email/username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    return {
+        "user": user,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
 
 @app.get("/users/{user_id}", response_model=UserOut, tags=["Users"])
 def get_user_by_id(user_id: int = Path(..., description="ID of the user to retrieve"), db: Session = Depends(get_db)):
