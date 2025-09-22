@@ -12,7 +12,7 @@ class RoadmapChatService:
         self.GREETINGS = ["selam", "merhaba", "selamlar", "merhabalar", "günaydın", "iyi günler", "iyi akşamlar",
                           "nasılsın", "naber"]
 
-    def _extract_topics_from_roadmap(self, roadmap_content: dict) -> List[str]:
+    def extract_topics(self, roadmap_content: dict) -> List[str]:
         """Helper function to get a flat list of all topic titles from the roadmap JSON."""
         topics = []
         if roadmap_content.get("diagramTitle"):
@@ -40,7 +40,7 @@ class RoadmapChatService:
             return "Merhaba! Yol haritanla ilgili nasıl yardımcı olabilirim?"
 
         # --- 2. Yapay Zeka ile Alaka Kontrolü (1. LLM Çağrısı) ---
-        topic_list = self._extract_topics_from_roadmap(roadmap_content)
+        topic_list = self.extract_topics(roadmap_content)
         if not topic_list:
             return "Üzgünüm, bu yol haritasında henüz bir konu bulunmuyor."
 
