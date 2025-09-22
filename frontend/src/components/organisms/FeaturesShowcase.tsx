@@ -89,19 +89,7 @@ const FeaturesShowcase: React.FC = () => {
           ))}
         </div>
 
-        {/* Stats */}
-        <div className="mt-8 lg:mt-12 pt-6 lg:pt-8 border-t border-white/20">
-          <div className="grid grid-cols-2 gap-4 lg:gap-6">
-            <div className="text-center lg:text-left">
-              <div className="text-2xl lg:text-3xl font-black text-yellow-200">10K+</div>
-              <div className="text-xs lg:text-sm opacity-80">Başarılı Kullanıcı</div>
-            </div>
-            <div className="text-center lg:text-left">
-              <div className="text-2xl lg:text-3xl font-black text-yellow-200">85%</div>
-              <div className="text-xs lg:text-sm opacity-80">İş Bulma Oranı</div>
-            </div>
-          </div>
-        </div>
+      
 
         {/* Floating Elements */}
         <div className="absolute -top-4 -right-4 w-20 h-20 bg-gradient-to-br from-yellow-400/20 to-orange-500/20 rounded-full blur-xl animate-pulse" />

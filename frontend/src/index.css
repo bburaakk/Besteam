@@ -12,6 +12,17 @@
   50% { transform: translateY(-15px); }
 }
 
+@keyframes fade-in {
+  0% { 
+    opacity: 0; 
+    transform: translateY(10px) scale(0.95);
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1);
+  }
+}
+
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
@@ -19,4 +30,8 @@
 .animate-float-delayed {
   animation: float-delayed 6s ease-in-out infinite;
   animation-delay: 3s;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
 }

@@ -109,6 +109,7 @@ class ProjectOut(ProjectBase):
     class Config:
         from_attributes = True
 
+
 #-----------Hackathon----------
 
 class UserBasicInfo(BaseModel):
@@ -159,4 +160,23 @@ class MessageSchema(BaseModel):
     class Config:
         from_attributes = True
 
+
+
+# ---------- Quiz Schemas ----------
+class QuizRequest(BaseModel):
+    roadmap_id: int
+
+class Question(BaseModel):
+    question: str
+    options: List[str]
+    answer: str
+
+class QuizLevel(BaseModel):
+    level: int
+    levelTitle: str
+    questions: List[Question]
+
+class QuizResponse(BaseModel):
+    quizTitle: str
+    levels: List[QuizLevel]
 

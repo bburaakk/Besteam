@@ -217,20 +217,6 @@ const Timeline: React.FC = () => {
           </div>
         </div>
         
-        {/* Bottom Stats */}
-        <div className="mt-16 sm:mt-20 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8 max-w-4xl mx-auto">
-          {[
-            { number: '10,000+', label: 'Başarılı Kullanıcı', icon: '👥' },
-            { number: '85%', label: 'Ortalama Artış', icon: '📈' },
-            { number: '2 Ay', label: 'Ortalama Süre', icon: '⚡' }
-          ].map((stat, i) => (
-            <div key={i} className="text-center bg-white/80 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg border border-gray-100">
-              <div className="text-2xl sm:text-3xl mb-2">{stat.icon}</div>
-              <div className="text-2xl sm:text-3xl font-black text-gray-900 mb-1">{stat.number}</div>
-              <div className="text-sm text-gray-600 font-medium">{stat.label}</div>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   );

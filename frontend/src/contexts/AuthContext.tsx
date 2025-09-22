@@ -5,8 +5,11 @@ interface User {
   id: number;
   email?: string;
   username: string;
-  firstName?: string;
-  lastName?: string;
+  first_name?: string;
+  last_name?: string;
+  biography?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface AuthContextType {
@@ -32,7 +35,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     if (savedUser && token) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsedUser = JSON.parse(savedUser);
+        
+        // Eski format kontrolü - eğer firstName/lastName varsa ve first_name/last_name yoksa temizle
+        if (parsedUser.firstName || parsedUser.lastName) {
+          console.log('Eski format user verisi tespit edildi, temizleniyor...');
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          return;
+        }
+        
+        setUser(parsedUser);
       } catch (error) {
         console.error('Error parsing saved user:', error);
         localStorage.removeItem('user');
