@@ -183,39 +183,25 @@ def summarize_item(
 
 @app.post("/api/roadmaps/{roadmap_id}/chat")
 def roadmap_chat(
-        roadmap_id: int,
-        question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    roadmap_id: int,
+    question: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # Kullanıcının roadmap'ini getir
     roadmap = db.query(Roadmap).filter(
         Roadmap.id == roadmap_id,
         Roadmap.user_id == current_user.id
     ).first()
     if not roadmap:
-        raise HTTPException(status_code=404, detail="Roadmap not found")
+        raise HTTPException(status_code=404, detail="Roadmap not found or you don't have access.")
 
-    # Konuları çıkar
-    topics = chat_service.extract_topics(roadmap.content)
-
-    # Soruyu eşleştir
-    matched_topic = chat_service.match_question_to_topic(question, topics)
-    if not matched_topic:
-        raise HTTPException(
-            status_code=400,
-            detail="Bu soru roadmap konularıyla ilgili değil. Lütfen roadmap konularına dair soru sorun."
-        )
-
-    # AI cevabı üret
-    answer = chat_service.generate_answer(question, matched_topic, roadmap.content)
-
-    return {
-        "roadmap_id": roadmap.id,
-        "topic": matched_topic,
-        "question": question,
-        "answer": answer
-    }
+    try:
+        # Düzeltilmiş metod adı ve eklenen parametre
+        answer = chat_service.generate_answer(question=question, roadmap_content=roadmap.content)
+        return {"roadmap_id": roadmap_id, "question": question, "answer": answer}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
 
 
 # ---------- CV Analyze ----------
