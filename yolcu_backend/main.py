@@ -1,23 +1,14 @@
-
 import os
 import json
 import tempfile
-from typing import List, Annotated
-
-# FastAPI and related imports
+from typing import List
 from fastapi import FastAPI, UploadFile, File, Path, Body, Depends, HTTPException, status,WebSocket, WebSocketDisconnect, Query
-
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-
-# --- Imports from yolcu_backend ---
 from yolcu_backend.settings import settings
 from yolcu_backend.database import engine as yolcu_engine, Base as YolcuBase
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
-
 from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut,ProjectSuggestionResponse, LoginSchema, TokenUserResponse
-
 from yolcu_backend.models import User, Roadmap, CV, Project
 from yolcu_backend.services.ai_service import GeminiService
 from yolcu_backend.generators.roadmap_generator import RoadmapGenerator
@@ -27,14 +18,11 @@ from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.project_suggestion_generator import ProjectSuggestionGenerator
 from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
 from yolcu_backend.services import db_service
-
-# --- Imports from hackathon project ---
 from yolcu_backend.database import engine as hackathon_engine, SessionLocal
 from yolcu_backend.websocket_manager import manager
 from yolcu_backend import models, schemas, crud
-# --- Database Table Creation ---
-# Create tables for both applications. Ensure engines point to the same database.
-# Note: This assumes both YolcuBase and models.Base can bind to the same engine.
+import uvicorn
+
 YolcuBase.metadata.create_all(bind=yolcu_engine)
 models.Base.metadata.create_all(bind=hackathon_engine)
 
@@ -44,8 +32,8 @@ app = FastAPI(
 )
 
 # --- CORS Middleware ---
-# Using the more specific CORS settings from the hackathon project for better security.
 origins = [
+    "https://yolcu-app.onrender.com",
     "http://localhost:5173",  # React (Vite) default
     "http://localhost:3000",  # Create React App default
 ]
@@ -58,7 +46,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Service Initialization (from yolcu_backend) ---
+# --- Service Initialization ---
 gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
 roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
 cv_analyzer = CVAnalyzer(ai_service=gemini_service)
@@ -66,20 +54,6 @@ summary_creator = SummaryCreator(ai_service=gemini_service)
 chat_service = RoadmapChatService(ai_service=gemini_service)
 project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
 
-
-# --- Startup Event (from hackathon project) ---
-@app.on_event("startup")
-def on_startup():
-    """
-    This function is executed when the application starts.
-    It's a good place for initialization logic.
-    """
-    print("Application startup complete. Data will be served from the database.")
-
-
-# =================================================================
-# ========== YOLCU BACKEND ENDPOINTS ==============================
-# =================================================================
 
 # ---------- Signup ----------
 @app.post("/signup", response_model=TokenUserResponse, tags=["Authentication"])
@@ -107,22 +81,26 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 
 # ---------- Login ----------
-@app.post("/login")
-def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
+@app.post("/login", response_model=TokenUserResponse)
+def login(login_data: LoginSchema, db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == form_data.username) | (User.username == form_data.username)
+        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
     ).first()
 
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=401,
             detail="Incorrect email/username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type":"bearer"}
 
+    return {
+        "user": user,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
 
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut, tags=["Users"])
@@ -144,7 +122,7 @@ def generate_roadmap(request: TopicRequest, db: Session = Depends(get_db),
     db.refresh(roadmap)
     return roadmap
 
-
+# ---------- Roadmap Summaries ----------
 @app.get("/api/roadmaps/{roadmap_id}/summaries", tags=["Roadmaps"])
 def summarize_item(roadmap_id: int, item_id: str = Query(..., description="Left or right item ID"),
                    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -172,7 +150,7 @@ def summarize_item(roadmap_id: int, item_id: str = Query(..., description="Left 
     return {"roadmap_id": roadmap.id, "center_node": center_node_title, "item_id": item_id, "topic": topic_title,
             "summary": summary}
 
-
+# ---------- Roadmap Chat ----------
 @app.post("/api/roadmaps/{roadmap_id}/chat", tags=["Roadmaps"])
 def roadmap_chat(roadmap_id: int, question: str = Body(..., embed=True), db: Session = Depends(get_db),
                  current_user: User = Depends(get_current_user)):
@@ -274,10 +252,6 @@ async def get_motivational_message():
         raise HTTPException(status_code=500, detail="Great projects are waiting for you, let's get started!")
 
 
-# =================================================================
-# ========== HACKATHON PROJECT ENDPOINTS ==========================
-# =================================================================
-
 # ---------- Get Hackathons ----------
 @app.get("/hackathons/", response_model=List[schemas.HackathonSchema], tags=["Hackathons"])
 def get_hackathons(db: Session = Depends(get_db)):
@@ -288,7 +262,6 @@ def get_hackathons(db: Session = Depends(get_db)):
 @app.post("/hackathons/{hackathon_id}/teams/", response_model=schemas.TeamSchema, status_code=status.HTTP_201_CREATED,
           tags=["Teams"])
 def create_team(hackathon_id: int, team: schemas.TeamCreate, current_user_id: int, db: Session = Depends(get_db)):
-    # Note: In a real app, current_user_id should come from a decoded JWT token (like `Depends(get_current_user)`)
     return crud.create_team_for_hackathon(db=db, team=team, hackathon_id=hackathon_id, user_id=current_user_id)
 
 
@@ -312,7 +285,7 @@ def join_team(team_id: int, current_user_id: int, db: Session = Depends(get_db))
 def read_hackathon_messages(hackathon_id: int, db: Session = Depends(get_db)):
     return crud.get_hackathon_messages(db, hackathon_id=hackathon_id)
 
-
+# ---------- Messages Endpoints ----------
 @app.get("/teams/{team_id}/messages", response_model=List[schemas.MessageSchema], tags=["Chat"])
 def read_team_messages(team_id: int, current_user_id: int, db: Session = Depends(get_db)):
     team = crud.get_team(db, team_id=team_id)
@@ -324,7 +297,6 @@ def read_team_messages(team_id: int, current_user_id: int, db: Session = Depends
 # ---------- WebSocket Endpoint for Chat ----------
 @app.websocket("/ws/{chat_type}/{item_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, chat_type: str, item_id: int, user_id: int):
-    # WebSocket dependencies are tricky, so we create a new session.
     db = SessionLocal()
     try:
         user = crud.get_user(db, user_id)
@@ -362,19 +334,9 @@ async def websocket_endpoint(websocket: WebSocket, chat_type: str, item_id: int,
         db.close()
 
 
-# =================================================================
-# ========== APPLICATION RUNNER ===================================
-# =================================================================
 
 if __name__ == "__main__":
-    import uvicorn
-
-    # Clean up old database file on restart for development
     if os.path.exists("hackathon.db"):
         os.remove("hackathon.db")
         print("Old database file removed.")
-
-    # Note: Ensure your yolcu_backend also uses 'hackathon.db' or unify db configurations.
-
-    # Running on port 8000 with auto-reload, as specified in the hackathon project.
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
