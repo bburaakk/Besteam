@@ -71,8 +71,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       id: 'hackathons',
       label: 'Hackathonlar',
       icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M8 21h8M12 17v4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M7 4h10a1 1 0 011 1v2a5 5 0 01-5 5h-2A5 5 0 017 7V5a1 1 0 011-1z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M6 7H5a3 3 0 000 6h1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M18 7h1a3 3 0 010 6h-1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M9 4l.5-1.5M15 4l-.5-1.5M12 4l0-2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       ),
       path: '/hackathons',
@@ -87,17 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       ),
       path: '/profile',
     },
-    {
-      id: 'settings',
-      label: 'Ayarlar',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
-      path: '/settings',
-    },
+    // settings removed
   ];
 
   const handleMenuClick = (path: string) => {

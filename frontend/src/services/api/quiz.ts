@@ -72,9 +72,7 @@ export interface QuizSubmissionResponse {
 }
 
 export const quizService = {
-  /**
-   * Generate a new quiz for a specific roadmap
-   */
+
   generateQuiz: async (roadmapId: number): Promise<QuizGenerationResponse> => {
     const response = await apiClient.post<QuizGenerationResponse | RawQuizResponse>('/api/quizzes/generate', {
       roadmap_id: roadmapId
@@ -113,9 +111,7 @@ export const quizService = {
     return { quiz: mappedQuiz } as QuizGenerationResponse;
   },
 
-  /**
-   * Get a specific quiz by ID
-   */
+
   getQuiz: async (quizId: number): Promise<Quiz> => {
     const response = await apiClient.get<Quiz>(`/api/quizzes/${quizId}`);
     return response.data;
