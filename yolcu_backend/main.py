@@ -31,7 +31,6 @@ from yolcu_backend.services import db_service
 # --- Imports from hackathon project ---
 from yolcu_backend.database import engine as hackathon_engine, SessionLocal
 from yolcu_backend.websocket_manager import manager
-from yolcu_backend.sample_data import HACKATHONS
 from yolcu_backend import models, schemas, crud
 # --- Database Table Creation ---
 # Create tables for both applications. Ensure engines point to the same database.
@@ -71,48 +70,11 @@ project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_serv
 # --- Startup Event (from hackathon project) ---
 @app.on_event("startup")
 def on_startup():
-    db = SessionLocal()
-    # Veritabanında ilk hackathon'un olup olmadığını kontrol edelim.
-    # Varsa, örnek veriler zaten eklenmiş demektir.
-    if not crud.get_hackathons(db): # Changed from get_hackathon to get_hackathons and check if list is empty
-        print("Database is empty, adding sample data...")
-
-        # --- Örnek Kullanıcılar (İsteğe bağlı, kalabilir) ---
-        user_ali_data = schemas.UserCreate(
-            first_name="Ali", last_name="Veli", username="ali",
-            email="ali@example.com", password="password123"
-        )
-        user_veli_data = schemas.UserCreate(
-            first_name="Veli", last_name="Yılmaz", username="veli",
-            email="veli@example.com", password="password123"
-        )
-        user_ali = crud.create_user(db, user=user_ali_data)
-        user_veli = crud.create_user(db, user=user_veli_data)
-
-        # --- Örnek Hackathon'ları Döngüyle Ekleme ---
-        print(f"Adding {len(HACKATHONS)} hackathons from sample_data.py...")
-        created_hackathons = []
-        for hackathon_data in HACKATHONS:
-            hackathon_schema = schemas.HackathonCreate(
-                title=hackathon_data["title"],
-                description=hackathon_data["description"]
-            )
-            created_hackathon = crud.create_hackathon(db, hackathon=hackathon_schema)
-            created_hackathons.append(created_hackathon)
-            print(f"  - Created hackathon: {created_hackathon.title}")
-
-        # --- İlk Hackathon'a Örnek Bir Takım Ekleme (İsteğe bağlı) ---
-        if created_hackathons:
-            first_hackathon = created_hackathons[0]
-            team = crud.create_team_for_hackathon(db, team=schemas.TeamCreate(name="Tekno Girişimciler"),
-                                                  hackathon_id=first_hackathon.id, user_id=user_ali.id)
-            crud.add_user_to_team(db, team_id=team.id, user_id=user_veli.id)
-            print(f"Sample team created for '{first_hackathon.title}'.")
-
-    else:
-        print("Database already contains data, skipping sample data creation.")
-
-    db.close()
+    """
+    This function is executed when the application starts.
+    It's a good place for initialization logic.
+    """
+    print("Application startup complete. Data will be served from the database.")
 
 
 # =================================================================
@@ -145,26 +107,21 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 
 # ---------- Login ----------
-@app.post("/login", response_model=TokenUserResponse)
-def login(login_data: LoginSchema, db: Session = Depends(get_db)):
+@app.post("/login")
+def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
+        (User.email == form_data.username) | (User.username == form_data.username)
     ).first()
 
-    if not user or not verify_password(login_data.password, user.password_hash):
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email/username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
-
-    return {
-        "user": user,
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    return {"access_token": access_token, "token_type":"bearer"}
 
 
 # ---------- Get User by ID ----------
@@ -372,7 +329,7 @@ async def websocket_endpoint(websocket: WebSocket, chat_type: str, item_id: int,
     try:
         user = crud.get_user(db, user_id)
         if not user:
-            await websocket.close(code=status.WS_1008_POLICY_VIVIOLATION)
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
         room_name = f"{chat_type}-{item_id}"
