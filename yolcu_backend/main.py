@@ -10,7 +10,8 @@ from yolcu_backend.generators.project_evaluator import ProjectEvaluator
 from yolcu_backend.generators.roadmap_chat_service import RoadmapChatService
 from yolcu_backend.generators.summary_creator import SummaryCreator
 from yolcu_backend.prompts.motivational_prompt import MOTIVATIONAL_PROMPT
-from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, LoginSchema, TokenUserResponse , ProjectOut, ProjectSuggestionResponse, ProjectLevel, ProjectIdea, QuizRequest, QuizResponse
+from yolcu_backend.schemas import UserCreate, UserOut, TopicRequest, RoadmapOut, CVOut, LoginSchema, TokenUserResponse, \
+    ProjectOut, ProjectSuggestionResponse, ProjectLevel, ProjectIdea, QuizRequest, QuizResponse
 from yolcu_backend.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_db
 from yolcu_backend.settings import settings
 from yolcu_backend.services.ai_service import GeminiService
@@ -21,7 +22,6 @@ from yolcu_backend.generators.quiz_generator import QuizGenerator
 from yolcu_backend.services import db_service
 from yolcu_backend.models import User, Roadmap, CV, Project, Quiz
 from yolcu_backend.database import engine, Base
-
 
 # DB tablolarını oluştur
 Base.metadata.create_all(bind=engine)
@@ -47,6 +47,7 @@ project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_serv
 project_evaluator = ProjectEvaluator(ai_service=gemini_service)
 quiz_generator = QuizGenerator(ai_service=gemini_service)
 
+
 # ---------- Signup ----------
 @app.post("/signup", response_model=TokenUserResponse)
 def signup(user: UserCreate, db: Session = Depends(get_db)):
@@ -70,7 +71,8 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
     # Kayıt sonrası otomatik token döndürmek istersek:
     access_token = create_access_token(data={"sub": str(db_user.id)})
-    return {"user":db_user,"access_token": access_token, "token_type": "bearer"}
+    return {"user": db_user, "access_token": access_token, "token_type": "bearer"}
+
 
 # ---------- Login ----------
 @app.post("/login", response_model=TokenUserResponse)
@@ -93,26 +95,29 @@ def login(login_data: LoginSchema, db: Session = Depends(get_db)):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user_by_id(
-    user_id: int = Path(..., description="ID of the user to retrieve"),
-    db: Session = Depends(get_db)
+        user_id: int = Path(..., description="ID of the user to retrieve"),
+        db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+
 # ---------- Roadmap Generator ----------
 @app.post("/api/roadmaps/generate", response_model=RoadmapOut)
 def generate_roadmap(
-    request: TopicRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        request: TopicRequest,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     generator = RoadmapGenerator(ai_service=gemini_service)  # gemini_service DI yapılmalı
-    roadmap_json = generator.create_roadmap(request.field)   # dict döner
+    roadmap_json = generator.create_roadmap(request.field)  # dict döner
 
     roadmap = Roadmap(user_id=current_user.id, content=roadmap_json)
     db.add(roadmap)
@@ -120,14 +125,17 @@ def generate_roadmap(
     db.refresh(roadmap)
 
     return roadmap
+
+
 from fastapi import Query
+
 
 @app.get("/api/roadmaps/{roadmap_id}/summaries")
 def summarize_item(
-    roadmap_id: int,
-    item_id: str = Query(..., description="Left veya right item ID"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        roadmap_id: int,
+        item_id: str = Query(..., description="Left veya right item ID"),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     # Roadmap'i çek
     roadmap = db.query(Roadmap).filter(
@@ -172,12 +180,13 @@ def summarize_item(
         "summary": summary
     }
 
+
 @app.post("/api/roadmaps/{roadmap_id}/chat")
 def roadmap_chat(
-    roadmap_id: int,
-    question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        roadmap_id: int,
+        question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     # Kullanıcının roadmap'ini getir
     roadmap = db.query(Roadmap).filter(
@@ -208,12 +217,13 @@ def roadmap_chat(
         "answer": answer
     }
 
+
 # ---------- CV Analyze ----------
 @app.post("/api/cv/analyze", response_model=CVOut)
 async def analyze_cv(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+        file: UploadFile = File(...),
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
 ):
     # --- Dosya kontrolü ---
     if not file.filename.lower().endswith(('.pdf', '.txt')):
@@ -268,13 +278,15 @@ async def analyze_cv(
             os.unlink(temp_path)
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
 
+
 # ---------- Project Suggestions ----------
 @app.get("/project-suggestions", response_model=ProjectSuggestionResponse)
 def get_project_suggestions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         titles = db_service.get_centralnode_titles(db, user_id=current_user.id)
         if not titles:
-            raise HTTPException(status_code=404, detail="No roadmap titles found for the current user. Please create a roadmap first.")
+            raise HTTPException(status_code=404,
+                                detail="No roadmap titles found for the current user. Please create a roadmap first.")
 
         suggestions_json_str = project_suggestion_generator.generate_suggestions(titles)
         suggestions_data = json.loads(suggestions_json_str)
@@ -294,7 +306,7 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
                         description=project_idea["description"]
                     )
                     db.add(new_project)
-                    db.flush() # Flush to get the ID before commit
+                    db.flush()  # Flush to get the ID before commit
                     db.refresh(new_project)
                     created_projects.append(ProjectIdea(
                         id=new_project.id,
@@ -311,6 +323,7 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
         db.rollback()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
+
 
 # --- Project Evaluate ---
 @app.post("/api/projects/{project_id}/evaluate", response_model=dict, tags=["Projects"])
@@ -364,10 +377,11 @@ async def evaluate_specific_project(
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
 
+
 @app.get("/api/projects", response_model=list[ProjectOut], tags=["Projects"])
 def get_user_projects(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
     Retrieves all projects for the currently logged-in user.
@@ -391,12 +405,13 @@ async def get_motivational_message():
             detail="Harika projeler seni bekliyor, haydi başlayalım!"
         )
 
+
 # ---------- Quiz ----------
 @app.post("/api/quizzes/generate", response_model=QuizResponse, tags=["Quizzes"])
 def generate_quiz(
-    request: QuizRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        request: QuizRequest,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
     Generates a 5-level quiz based on roadmap items, saves it to the database,
@@ -412,12 +427,23 @@ def generate_quiz(
             raise HTTPException(status_code=404, detail="Roadmap not found or access denied.")
 
         print(f"Quiz API endpoint called for roadmap_id: {request.roadmap_id}")
-        
+
+        # Extract left and right items from the roadmap content
+        left_items = []
+        right_items = []
+        for stage in roadmap.content.get("mainStages", []):
+            for node in stage.get("subNodes", []):
+                left_items.extend(node.get("leftItems", []))
+                right_items.extend(node.get("rightItems", []))
+
+        if not left_items and not right_items:
+            raise HTTPException(status_code=404, detail="No items found in roadmap to generate a quiz.")
+
         # 1. Generate the quiz content from the AI service
         quiz_data = quiz_generator.create_quiz(
             roadmap_id=request.roadmap_id,
-            rightItems=request.rightItems,
-            leftItems=request.leftItems
+            rightItems=right_items,
+            leftItems=left_items
         )
 
         # 2. Parse the generated data and save it to the database
@@ -432,9 +458,9 @@ def generate_quiz(
                     answer=question_data.get("answer")
                 )
                 db.add(new_question)
-        
+
         db.commit()
-        
+
         # 3. Return the full quiz data to the frontend
         return quiz_data
 
@@ -443,9 +469,11 @@ def generate_quiz(
         raise HTTPException(status_code=500, detail=str(ve))
     except Exception as e:
         db.rollback()
-        traceback.print_exc() # For debugging on the server
+        traceback.print_exc()  # For debugging on the server
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while creating the quiz: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)

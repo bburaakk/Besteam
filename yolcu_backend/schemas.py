@@ -110,14 +110,8 @@ class ProjectOut(ProjectBase):
         from_attributes = True
 
 # ---------- Quiz Schemas ----------
-class RoadmapItem(BaseModel):
-    id: str
-    name: str
-
 class QuizRequest(BaseModel):
     roadmap_id: int
-    rightItems: List[RoadmapItem]
-    leftItems: List[RoadmapItem]
 
 class Question(BaseModel):
     question: str
