@@ -1,9 +1,8 @@
 import json
 import re
-from typing import List
+from typing import List, Dict
 from yolcu_backend.services.ai_service import GeminiService
 from yolcu_backend.prompts.quiz_prompts import QUIZ_GENERATOR_PROMPT_TEMPLATE
-from yolcu_backend.schemas import RoadmapItem
 
 
 class QuizGenerator:
@@ -22,11 +21,11 @@ class QuizGenerator:
             # Raise a new error with more context
             raise ValueError(f"Failed to decode JSON from AI response. Error: {e}. Response was: '{clean_text}'")
 
-    def create_quiz(self, roadmap_id: int, rightItems: List[RoadmapItem], leftItems: List[RoadmapItem]) -> dict:
+    def create_quiz(self, roadmap_id: int, rightItems: List[Dict], leftItems: List[Dict]) -> dict:
         print(f"Roadmap ID '{roadmap_id}' için quiz mantığı çalıştırılıyor...")
 
-        right_items_str = ", ".join([item.name for item in rightItems])
-        left_items_str = ", ".join([item.name for item in leftItems])
+        right_items_str = ", ".join([item['name'] for item in rightItems])
+        left_items_str = ", ".join([item['name'] for item in leftItems])
 
         final_prompt = QUIZ_GENERATOR_PROMPT_TEMPLATE.format(
             rightItems=right_items_str,
