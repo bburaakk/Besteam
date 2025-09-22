@@ -117,11 +117,10 @@ class Quiz(Base):
     id = Column(Integer, primary_key=True, index=True)
     roadmap_id = Column(Integer, ForeignKey("roadmaps.id", ondelete="CASCADE"), nullable=False)
     question = Column(Text, nullable=False)
-    level = Column(String(50), nullable=False)
+    level = Column(String(255), nullable=False)
     options = Column(JSONB, nullable=False)
     answer = Column(Text, nullable=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
     roadmap = relationship("Roadmap", back_populates="quizzes")
-
