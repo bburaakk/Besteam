@@ -23,5 +23,9 @@ chardet
 google-generativeai
 langdetect
 
+# RAG & Vector Database
+chromadb
+sentence-transformers
+
 # Ortam Değişkenleri
 python-dotenv

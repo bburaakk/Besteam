@@ -1,6 +1,10 @@
+from typing import Annotated
+
 from fastapi import FastAPI, UploadFile, File, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+from rich import status
 from sqlalchemy.orm import Session
 import tempfile
 import os
@@ -42,6 +46,7 @@ gemini_service = GeminiService(api_key=settings.GEMINI_API_KEY)
 roadmap_generator = RoadmapGenerator(ai_service=gemini_service)
 cv_analyzer = CVAnalyzer(ai_service=gemini_service)
 summary_creator = SummaryCreator(ai_service=gemini_service)
+# Chat servisi artık RAG veya vektör veritabanı kullanmadığı için basitçe başlatılıyor
 chat_service = RoadmapChatService(ai_service=gemini_service)
 project_suggestion_generator = ProjectSuggestionGenerator(ai_service=gemini_service)
 project_evaluator = ProjectEvaluator(ai_service=gemini_service)
@@ -68,31 +73,26 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
 
-    # Kayıt sonrası otomatik token döndürmek istersek:
     access_token = create_access_token(data={"sub": str(db_user.id)})
     return {"user":db_user,"access_token": access_token, "token_type": "bearer"}
 
 # ---------- Login ----------
-@app.post("/login", response_model=TokenUserResponse)
-def login(login_data: LoginSchema, db: Session = Depends(get_db)):
+@app.post("/login")
+def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        (User.email == login_data.email_or_username) | (User.username == login_data.email_or_username)
+        (User.email == form_data.username) | (User.username == form_data.username)
     ).first()
 
-    if not user or not verify_password(login_data.password, user.password_hash):
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email/username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
 
-    return {
-        "user": user,
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
 # ---------- Get User by ID ----------
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user_by_id(
@@ -111,15 +111,15 @@ def generate_roadmap(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    generator = RoadmapGenerator(ai_service=gemini_service)  # gemini_service DI yapılmalı
-    roadmap_json = generator.create_roadmap(request.field)   # dict döner
+    generator = RoadmapGenerator(ai_service=gemini_service)
+    roadmap_json = generator.create_roadmap(request.field)
 
     roadmap = Roadmap(user_id=current_user.id, content=roadmap_json)
     db.add(roadmap)
     db.commit()
     db.refresh(roadmap)
-
     return roadmap
+
 from fastapi import Query
 
 @app.get("/api/roadmaps/{roadmap_id}/summaries")
@@ -129,7 +129,6 @@ def summarize_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Roadmap'i çek
     roadmap = db.query(Roadmap).filter(
         Roadmap.id == roadmap_id,
         Roadmap.user_id == current_user.id
@@ -137,9 +136,7 @@ def summarize_item(
     if not roadmap:
         raise HTTPException(status_code=404, detail="Roadmap not found")
 
-    # item_title ve center_node bul
-    topic_title = None
-    center_node_title = None
+    topic_title, center_node_title = None, None
     for stage in roadmap.content.get("mainStages", []):
         for node in stage.get("subNodes", []):
             for side in ["leftItems", "rightItems"]:
@@ -148,21 +145,14 @@ def summarize_item(
                         topic_title = item.get("name")
                         center_node_title = node.get("centralNodeTitle")
                         break
-                if topic_title:
-                    break
-            if topic_title:
-                break
-        if topic_title:
-            break
+                if topic_title: break
+            if topic_title: break
+        if topic_title: break
 
     if not topic_title:
         raise HTTPException(status_code=404, detail="Item not found in roadmap.")
 
-    # SummaryCreator ile özet üret
-    summary = summary_creator.generate_summary(
-        roadmap_json=roadmap.content,
-        item_id=item_id
-    )
+    summary = summary_creator.generate_summary(roadmap_json=roadmap.content, item_id=item_id)
 
     return {
         "roadmap_id": roadmap.id,
@@ -175,45 +165,31 @@ def summarize_item(
 @app.post("/api/roadmaps/{roadmap_id}/chat")
 def roadmap_chat(
     roadmap_id: int,
-    question: str = Body(..., embed=True, description="Kullanıcının roadmap konularıyla ilgili sorusu"),
+    question: str = Body(..., embed=True),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Kullanıcının roadmap'ini getir
     roadmap = db.query(Roadmap).filter(
         Roadmap.id == roadmap_id,
         Roadmap.user_id == current_user.id
     ).first()
     if not roadmap:
-        raise HTTPException(status_code=404, detail="Roadmap not found")
+        raise HTTPException(status_code=404, detail="Roadmap not found or you don't have access.")
 
-    # Konuları çıkar
-    topics = chat_service.extract_topics(roadmap.content)
-
-    # Soruyu eşleştir
-    matched_topic = chat_service.match_question_to_topic(question, topics)
-    if not matched_topic:
-        raise HTTPException(
-            status_code=400,
-            detail="Bu soru roadmap konularıyla ilgili değil. Lütfen roadmap konularına dair soru sorun."
-        )
-
-    # AI cevabı üret
-    answer = chat_service.generate_answer(question, matched_topic, roadmap.content)
-
-    return {
-        "roadmap_id": roadmap.id,
-        "topic": matched_topic,
-        "question": question,
-        "answer": answer
-    }
+    try:
+        # Düzeltilmiş metod adı ve eklenen parametre
+        answer = chat_service.generate_answer(question=question, roadmap_content=roadmap.content)
+        return {"roadmap_id": roadmap_id, "question": question, "answer": answer}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
 
 # ---------- CV Analyze ----------
 @app.post("/api/cv/analyze", response_model=CVOut)
 async def analyze_cv(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+        file: UploadFile = File(...),
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
 ):
     # --- Dosya kontrolü ---
     if not file.filename.lower().endswith(('.pdf', '.txt')):
@@ -268,13 +244,15 @@ async def analyze_cv(
             os.unlink(temp_path)
         raise HTTPException(status_code=500, detail=f"CV analysis failed: {str(e)}")
 
+
 # ---------- Project Suggestions ----------
 @app.get("/project-suggestions", response_model=ProjectSuggestionResponse)
 def get_project_suggestions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         titles = db_service.get_centralnode_titles(db, user_id=current_user.id)
         if not titles:
-            raise HTTPException(status_code=404, detail="No roadmap titles found for the current user. Please create a roadmap first.")
+            raise HTTPException(status_code=404,
+                                detail="No roadmap titles found for the current user. Please create a roadmap first.")
 
         suggestions_json_str = project_suggestion_generator.generate_suggestions(titles)
         suggestions_data = json.loads(suggestions_json_str)
@@ -294,7 +272,7 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
                         description=project_idea["description"]
                     )
                     db.add(new_project)
-                    db.flush() # Flush to get the ID before commit
+                    db.flush()  # Flush to get the ID before commit
                     db.refresh(new_project)
                     created_projects.append(ProjectIdea(
                         id=new_project.id,
@@ -311,6 +289,7 @@ def get_project_suggestions(db: Session = Depends(get_db), current_user: User = 
         db.rollback()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="An error occurred while generating project suggestions.")
+
 
 # --- Project Evaluate ---
 @app.post("/api/projects/{project_id}/evaluate", response_model=dict, tags=["Projects"])
@@ -364,10 +343,11 @@ async def evaluate_specific_project(
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
 
+
 @app.get("/api/projects", response_model=list[ProjectOut], tags=["Projects"])
 def get_user_projects(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
     Retrieves all projects for the currently logged-in user.
@@ -391,12 +371,13 @@ async def get_motivational_message():
             detail="Harika projeler seni bekliyor, haydi başlayalım!"
         )
 
+
 # ---------- Quiz ----------
 @app.post("/api/quizzes/generate", response_model=QuizResponse, tags=["Quizzes"])
 def generate_quiz(
-    request: QuizRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        request: QuizRequest,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
     Generates a 5-level quiz based on roadmap items, saves it to the database,
@@ -412,7 +393,7 @@ def generate_quiz(
             raise HTTPException(status_code=404, detail="Roadmap not found or access denied.")
 
         print(f"Quiz API endpoint called for roadmap_id: {request.roadmap_id}")
-        
+
         # 1. Generate the quiz content from the AI service
         quiz_data = quiz_generator.create_quiz(
             roadmap_id=request.roadmap_id,
@@ -432,9 +413,9 @@ def generate_quiz(
                     answer=question_data.get("answer")
                 )
                 db.add(new_question)
-        
+
         db.commit()
-        
+
         # 3. Return the full quiz data to the frontend
         return quiz_data
 
@@ -443,9 +424,12 @@ def generate_quiz(
         raise HTTPException(status_code=500, detail=str(ve))
     except Exception as e:
         db.rollback()
-        traceback.print_exc() # For debugging on the server
+        traceback.print_exc()  # For debugging on the server
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while creating the quiz: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)
+
