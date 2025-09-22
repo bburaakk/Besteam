@@ -18,9 +18,7 @@ const TrustIndicators: React.FC = () => {
         </div>
       </div>
       
-      <p className="text-xs text-gray-400">
-        10,000+ kişi Yolcu ile kariyerini dönüştürdü
-      </p>
+   
     </div>
   );
 };

@@ -394,11 +394,23 @@ def generate_quiz(
 
         print(f"Quiz API endpoint called for roadmap_id: {request.roadmap_id}")
 
+
+        # Extract left and right items from the roadmap content
+        left_items = []
+        right_items = []
+        for stage in roadmap.content.get("mainStages", []):
+            for node in stage.get("subNodes", []):
+                left_items.extend(node.get("leftItems", []))
+                right_items.extend(node.get("rightItems", []))
+
+        if not left_items and not right_items:
+            raise HTTPException(status_code=404, detail="No items found in roadmap to generate a quiz.")
+
         # 1. Generate the quiz content from the AI service
         quiz_data = quiz_generator.create_quiz(
             roadmap_id=request.roadmap_id,
-            rightItems=request.rightItems,
-            leftItems=request.leftItems
+            rightItems=right_items,
+            leftItems=left_items
         )
 
         # 2. Parse the generated data and save it to the database

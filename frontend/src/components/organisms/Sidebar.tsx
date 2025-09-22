@@ -169,26 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* User Info */}
-        {(!isCollapsed || !isDesktop) && (
-          <div className="p-6 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-700/50 backdrop-blur-sm">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg ring-2 ring-white/10">
-                B
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">
-                  Berkcan Gümüşışık
-                </p>
-                <p className="text-xs text-slate-400 truncate">gumusisikberkcan@gmail.com</p>
-                <div className="flex items-center mt-1">
-                  <div className="w-2 h-2 bg-green-400 rounded-full mr-1"></div>
-                  <span className="text-xs text-green-400">Çevrimiçi</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        
 
         {/* Expand button when collapsed - desktop only */}
         {isCollapsed && isDesktop && (

@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import 'highlight.js/styles/github-dark.css'; // Syntax highlighting theme
+import { useNavigate } from 'react-router-dom';
 import type { RoadmapContent } from '../../services/api/roadmap';
-import { summaryService, handleApiError } from '../../services';
 
 interface RoadmapMindmapProps {
   content: RoadmapContent;
@@ -12,15 +8,12 @@ interface RoadmapMindmapProps {
 }
 
 const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 }) => {
-  const [selectedNode, setSelectedNode] = useState<string | null>('stage-0'); // İlk aşamayı varsayılan olarak seçili yap
+  const navigate = useNavigate();
+  const [selectedNode, setSelectedNode] = useState<string | null>('stage-0');
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [summaryData, setSummaryData] = useState<{content: string, title: string} | null>(null);
-  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [modalPosition, setModalPosition] = useState<{x: number, y: number} | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -48,7 +41,6 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     if (target.tagName === 'svg' || 
         target.id === 'background-rect' || 
         (target.tagName === 'rect' && target.getAttribute('fill') === 'white')) {
-      e.preventDefault();
       setIsDragging(true);
       setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
     }
@@ -70,24 +62,23 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
+    const delta = e.deltaY * -0.01;
+    const newScale = Math.min(Math.max(0.1, transform.scale + delta), 3);
     
-    const rect = svgRef.current?.getBoundingClientRect();
+    // Get mouse position relative to container
+    const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     
-    // Mouse position relative to SVG
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     
-    // Current mouse position in the transformed coordinate system
-    const mouseXInWorld = (mouseX - transform.x) / transform.scale;
-    const mouseYInWorld = (mouseY - transform.y) / transform.scale;
-    
-    const delta = e.deltaY * -0.002; // Daha hassas zoom
-    const newScale = Math.min(Math.max(0.3, transform.scale + delta), 5); // Daha geniş zoom aralığı
+    // Calculate world coordinates
+    const worldX = (mouseX - transform.x) / transform.scale;
+    const worldY = (mouseY - transform.y) / transform.scale;
     
     // Calculate new transform to keep mouse position fixed
-    const newX = mouseX - mouseXInWorld * newScale;
-    const newY = mouseY - mouseYInWorld * newScale;
+    const newX = mouseX - worldX * newScale;
+    const newY = mouseY - worldY * newScale;
     
     setTransform({
       x: newX,
@@ -96,40 +87,10 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     });
   }, [transform]);
 
-
-  const fetchSummary = useCallback(async (itemTitle: string, clickEvent: React.MouseEvent, itemId: string) => {
-    setIsLoadingSummary(true);
-    setSummaryError(null);
-    
-    // Tıklanan pozisyonu al
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (rect) {
-      setModalPosition({
-        x: clickEvent.clientX - rect.left,
-        y: clickEvent.clientY - rect.top
-      });
-    }
-    
-    try {
-      // API'den özet çek - roadmap data'sından gelen gerçek ID'yi kullan
-      const data = await summaryService.getSummary(roadmapId, itemId);
-      setSummaryData({
-        title: data.topic || itemTitle, // API'den gelen topic'i kullan, yoksa fallback olarak itemTitle
-        content: data.summary || 'Özet bulunamadı.'
-      });
-    } catch (error) {
-      const errorMessage = handleApiError(error);
-      setSummaryError(errorMessage);
-    } finally {
-      setIsLoadingSummary(false);
-    }
-  }, [roadmapId]);
-
-  const closeSummary = useCallback(() => {
-    setSummaryData(null);
-    setSummaryError(null);
-    setModalPosition(null);
-  }, []);
+  const handleSubtopicClick = useCallback((_itemTitle: string, _clickEvent: React.MouseEvent, itemId: string) => {
+    // Navigate to the detail page with roadmapId and itemId
+    navigate(`/roadmap/${roadmapId}/detail/${encodeURIComponent(itemId)}`);
+  }, [navigate, roadmapId]);
 
   const zoomIn = useCallback(() => {
     const newScale = Math.min(transform.scale * 1.2, 5);
@@ -151,7 +112,7 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
   }, [transform, dimensions]);
 
   const zoomOut = useCallback(() => {
-    const newScale = Math.max(transform.scale / 1.2, 0.3);
+    const newScale = Math.max(transform.scale * 0.8, 0.3);
     const centerX = dimensions.width / 2;
     const centerY = dimensions.height / 2;
     
@@ -169,34 +130,28 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     });
   }, [transform, dimensions]);
 
-  // Helper function to wrap text with better character width estimation
   const wrapText = (text: string, maxWidth: number) => {
     const words = text.split(' ');
     const lines: string[] = [];
     let currentLine = '';
-    
-    // Better character width estimation (average character width in pixels)
-    const avgCharWidth = 7; // Slightly reduced for better fitting
-    const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth);
 
     words.forEach(word => {
       const testLine = currentLine ? `${currentLine} ${word}` : word;
+      // Approximate character width - adjust this value based on your font
+      const approximateWidth = testLine.length * 8; // Assuming ~8px per character
       
-      if (testLine.length <= maxCharsPerLine) {
+      if (approximateWidth <= maxWidth) {
         currentLine = testLine;
       } else {
         if (currentLine) {
           lines.push(currentLine);
           currentLine = word;
         } else {
-          // Word is too long, try to break it intelligently
-          if (word.length > maxCharsPerLine) {
-            // Break long words at reasonable points
-            const breakPoints = Math.ceil(word.length / maxCharsPerLine);
-            for (let i = 0; i < breakPoints; i++) {
-              const start = i * maxCharsPerLine;
-              const end = Math.min(start + maxCharsPerLine, word.length);
-              lines.push(word.substring(start, end));
+          // Word is too long, split it
+          if (word.length * 8 > maxWidth) {
+            const maxChars = Math.floor(maxWidth / 8);
+            for (let i = 0; i < word.length; i += maxChars) {
+              lines.push(word.slice(i, i + maxChars));
             }
           } else {
             lines.push(word);
@@ -229,8 +184,8 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     }> = [];
     
     const currentY = 150;
-    const centerX = 800; // Merkezi daha sağa kaydırdık subtopicler için yer açmak için
-    const stageSpacing = 400; // Ana topic'ler arası daha fazla boşluk
+    const centerX = 800;
+    const stageSpacing = 400;
 
     // Stage colors
     const stageColors = [
@@ -294,23 +249,21 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
     };
   }, [content]);
 
-
-
   const renderConnections = () => {
     return roadmapData.connections.map((connection, index: number) => {
-      const fromStep = roadmapData.steps.find(step => step.id === connection.from);
-      const toStep = roadmapData.steps.find(step => step.id === connection.to);
+      const fromStep = roadmapData.steps.find(s => s.id === connection.from);
+      const toStep = roadmapData.steps.find(s => s.id === connection.to);
       
       if (!fromStep || !toStep) return null;
-      
+
       return (
         <line
           key={`connection-${index}`}
-          x1={fromStep.position.x + 100}
-          y1={fromStep.position.y + 25}
-          x2={toStep.position.x + 100}
-          y2={toStep.position.y + 25}
-          stroke="#D1D5DB"
+          x1={fromStep.position.x + 120}
+          y1={fromStep.position.y + 60}
+          x2={toStep.position.x + 120}
+          y2={toStep.position.y}
+          stroke="#94A3B8"
           strokeWidth="3"
           className="transition-all duration-300"
         />
@@ -330,7 +283,7 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
       const baseX = isLeft ? 
         step.position.x - (isMobile ? 280 : 350) : 
         step.position.x + (isMobile ? 250 : 300);
-      const subtopicSpacing = isMobile ? 55 : 65; // Daha fazla boşluk
+      const subtopicSpacing = isMobile ? 55 : 65;
       const baseY = step.position.y - (subtopics.length * subtopicSpacing / 2);
 
       return subtopics.map((subtopic: { id: string; name: string; }, index: number) => {
@@ -355,7 +308,7 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
             stroke={step.color}
             strokeWidth="2"
             className="cursor-pointer hover:fill-gray-50 transition-all duration-200"
-            onClick={(e) => fetchSummary(subtopic.name, e, subtopic.id)}
+            onClick={(e) => handleSubtopicClick(subtopic.name, e, subtopic.id)}
           />
           {(() => {
             const wrappedLines = wrapText(subtopic.name, isMobile ? 210 : 270);
@@ -373,7 +326,7 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
           dominantBaseline="middle"
                 className="text-base fill-gray-700 font-medium cursor-pointer hover:fill-gray-900 transition-colors"
                 style={{ fontSize: isMobile ? '12px' : '14px' }}
-                onClick={(e) => fetchSummary(subtopic.name, e, subtopic.id)}
+                onClick={(e) => handleSubtopicClick(subtopic.name, e, subtopic.id)}
         >
                 {line}
         </text>
@@ -526,137 +479,6 @@ const RoadmapMindmap: React.FC<RoadmapMindmapProps> = ({ content, roadmapId = 1 
           </g>
         </svg>
       </div>
-
-      
-
-      {/* Summary Modal */}
-      {(summaryData || isLoadingSummary || summaryError) && modalPosition && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4"
-          onClick={closeSummary}
-        >
-          <div 
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden transform transition-all duration-300 ease-out scale-100"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)'
-            }}
-          >
-            {/* Modal Header */}
-            <div className="flex justify-between items-start p-6 pb-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
-              <div className="flex-1">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2 leading-tight">
-                  {summaryData?.title || 'Özet Yükleniyor...'}
-                </h3>
-                <div className="flex items-center text-sm text-gray-500">
-                  <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
-                    📚 Detaylı Özet
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={closeSummary}
-                className="ml-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200 flex-shrink-0"
-                title="Kapat"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto max-h-[65vh] bg-white">
-              {isLoadingSummary && (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <div className="relative">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200"></div>
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent absolute top-0"></div>
-                  </div>
-                  <span className="mt-4 text-gray-600 text-base font-medium">İçerik yükleniyor...</span>
-                  <span className="mt-1 text-gray-400 text-sm">Lütfen bekleyin</span>
-                </div>
-              )}
-
-              {summaryError && (
-                <div className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-2xl p-6">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                        <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <h4 className="text-red-800 font-semibold mb-1">Bir hata oluştu</h4>
-                      <p className="text-red-700 text-sm leading-relaxed">{summaryError}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {summaryData && !isLoadingSummary && (
-                <div className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-gray-700 prose-p:leading-relaxed prose-strong:text-gray-900 prose-strong:font-semibold prose-code:bg-gray-100 prose-code:text-gray-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-blockquote:border-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:text-blue-900 prose-ul:text-gray-700 prose-ol:text-gray-700 prose-li:text-gray-700">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight]}
-                    components={{
-                      // Custom styling for different elements
-                      h1: ({children}) => <h1 className="text-2xl font-bold text-gray-900 mb-4 mt-6 first:mt-0 border-b border-gray-200 pb-2">{children}</h1>,
-                      h2: ({children}) => <h2 className="text-xl font-bold text-gray-900 mb-3 mt-5 first:mt-0">{children}</h2>,
-                      h3: ({children}) => <h3 className="text-lg font-semibold text-gray-800 mb-2 mt-4 first:mt-0">{children}</h3>,
-                      p: ({children}) => <p className="text-gray-700 leading-relaxed mb-4 text-base">{children}</p>,
-                      ul: ({children}) => <ul className="list-disc list-inside text-gray-700 mb-4 space-y-1">{children}</ul>,
-                      ol: ({children}) => <ol className="list-decimal list-inside text-gray-700 mb-4 space-y-1">{children}</ol>,
-                      li: ({children}) => <li className="text-gray-700 leading-relaxed">{children}</li>,
-                      blockquote: ({children}) => <blockquote className="border-l-4 border-blue-500 bg-blue-50 pl-4 py-2 mb-4 italic text-blue-900">{children}</blockquote>,
-                      code: ({children, className}) => {
-                        const isInline = !className;
-                        return isInline ? 
-                          <code className="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code> :
-                          <code className={className}>{children}</code>;
-                      },
-                      pre: ({children}) => <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg mb-4 overflow-x-auto text-sm">{children}</pre>,
-                      strong: ({children}) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                      em: ({children}) => <em className="italic text-gray-700">{children}</em>,
-                      a: ({children, href}) => <a href={href} className="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">{children}</a>,
-                      hr: () => <hr className="my-6 border-gray-300" />,
-                      table: ({children}) => <div className="overflow-x-auto mb-4"><table className="min-w-full border border-gray-300">{children}</table></div>,
-                      thead: ({children}) => <thead className="bg-gray-50">{children}</thead>,
-                      tbody: ({children}) => <tbody>{children}</tbody>,
-                      tr: ({children}) => <tr className="border-b border-gray-200">{children}</tr>,
-                      th: ({children}) => <th className="px-4 py-2 text-left font-semibold text-gray-900 border-r border-gray-300 last:border-r-0">{children}</th>,
-                      td: ({children}) => <td className="px-4 py-2 text-gray-700 border-r border-gray-300 last:border-r-0">{children}</td>,
-                    }}
-                  >
-                    {summaryData.content}
-                  </ReactMarkdown>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex justify-between items-center p-6 pt-4 border-t border-gray-100 bg-gray-50">
-              <div className="flex items-center text-sm text-gray-500">
-                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                Detaylı bilgi için içeriği okuyun
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={closeSummary}
-                  className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                >
-                  Anladım
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

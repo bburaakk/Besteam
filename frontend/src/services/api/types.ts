@@ -35,6 +35,16 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
+  user: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    username: string;
+    email: string;
+    biography?: string;
+    created_at: string;
+    updated_at: string;
+  };
   access_token: string;
   token_type: string;
 }
@@ -58,4 +68,41 @@ export interface UpdateProfileRequest {
   last_name?: string;
   bio?: string;
   skills?: string[];
+}
+
+// Project Types
+export interface Project {
+  id: number;
+  title: string;
+  description: string;
+}
+
+export interface ProjectLevel {
+  level_name: string;
+  projects: Project[];
+}
+
+export interface ProjectLevelsResponse {
+  project_levels: ProjectLevel[];
+}
+
+export interface ProjectSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  technologies: string[];
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  estimatedTime: string;
+}
+
+export interface ProjectEvaluationResponse {
+  message?: string;
+  evaluation_id?: string;
+  score?: number;
+  projeAmaci?: string;
+  genelDegerlendirme?: string;
+  olumluYonler?: string[];
+  gelistirilebilecekYonler?: string[];
+  ogrenmeTavsiyesi?: string;
+  project_id?: number;
 }
