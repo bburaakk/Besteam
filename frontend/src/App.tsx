@@ -10,6 +10,8 @@ import DashboardPage from './pages/DashboardPage';
 import ProjectSuggestionsPage from './pages/ProjectSuggestionsPage';
 import ProjectEvaluationPage from './pages/ProjectEvaluationPage';
 import ProfilePage from './pages/ProfilePage';
+import QuizPage from './pages/QuizPage';
+import HackathonsPage from './pages/HackathonsPage';
 
 function App() {
   return (
@@ -25,7 +27,10 @@ function App() {
           <Route path="/cv-analysis" element={<CVAnalysisPage />} />
           <Route path="/project-suggestions" element={<ProjectSuggestionsPage />} />
           <Route path="/project-evaluation/:evaluationId" element={<ProjectEvaluationPage />} />
+         <Route path="/quiz" element={<QuizPage />} />
+          <Route path="/hackathons" element={<HackathonsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/roadmap/:roadmapId/quiz" element={<QuizPage />} />
         </Routes>
       </Router>
     </AuthProvider>

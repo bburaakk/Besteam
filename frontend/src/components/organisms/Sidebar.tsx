@@ -68,6 +68,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       path: '/project-suggestions',
     },
     {
+      id: 'hackathons',
+      label: 'Hackathonlar',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
+        </svg>
+      ),
+      path: '/hackathons',
+    },
+    {
       id: 'profile',
       label: 'Profil',
       icon: (

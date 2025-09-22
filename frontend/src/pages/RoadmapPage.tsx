@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, {  useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '../components/templates';
 import { Heading, Button, Alert } from '../components/atoms';
 import { RoadmapMindmap } from '../components/molecules';
@@ -25,10 +26,12 @@ const SOFTWARE_FIELDS = [
 ];
 
 const RoadmapPage: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedField, setSelectedField] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [roadmap, setRoadmap] = useState<RoadmapResponse | null>(null);
+  const [isQuizLoading, setIsQuizLoading] = useState(false);
   
   // Chat states
   const [chatQuestion, setChatQuestion] = useState<string>('');
@@ -60,6 +63,16 @@ const RoadmapPage: React.FC = () => {
   };
 
   const clearError = () => setError(null);
+
+  const handleCreateQuiz = async () => {
+    if (!roadmap) return;
+    setIsQuizLoading(true);
+    try {
+      navigate(`/quiz?roadmapId=${roadmap.id}`);
+    } finally {
+      setIsQuizLoading(false);
+    }
+  };
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,13 +109,30 @@ const RoadmapPage: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
           {/* Header */}
-          <div className="text-center mb-12">
-            <Heading level={1} className="text-4xl font-bold text-gray-900 mb-4">
-              Yazılım Roadmap Oluşturucu
-            </Heading>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Seçtiğiniz yazılım alanı için kişiselleştirilmiş bir öğrenme yol haritası oluşturun
-            </p>
+          <div className="mb-12">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="text-center sm:text-left">
+                <Heading level={1} className="text-4xl font-bold text-gray-900 mb-2">
+                  Yazılım Roadmap Oluşturucu
+                </Heading>
+                <p className="text-xl text-gray-600 max-w-2xl">
+                  Seçtiğiniz yazılım alanı için kişiselleştirilmiş bir öğrenme yol haritası oluşturun
+                </p>
+              </div>
+              {roadmap && (
+                <div className="w-full sm:w-auto">
+                  <Button
+                    onClick={handleCreateQuiz}
+                    disabled={isQuizLoading}
+                    variant="primary"
+                    size="lg"
+                    className="w-full sm:w-auto"
+                  >
+                    {isQuizLoading ? 'Quiz Oluşturuluyor...' : 'Quiz Oluştur'}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Main Content */}
@@ -169,6 +199,21 @@ const RoadmapPage: React.FC = () => {
                   </div>
                 </div>
                 <RoadmapMindmap content={roadmap.content} roadmapId={roadmap.id} />
+
+                
+              </div>
+            )}
+
+            {/* Quiz entry */}
+            {roadmap && (
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-2">
+                  <Heading level={3} className="text-xl font-semibold text-gray-900">Quiz</Heading>
+                  <Button onClick={handleCreateQuiz} disabled={isQuizLoading} variant="primary">
+                    {isQuizLoading ? 'Açılıyor...' : 'Quiz Oluştur'}
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-500">Quiz, ayrı sayfada açılacaktır.</p>
               </div>
             )}
           </div>
